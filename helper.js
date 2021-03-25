@@ -1,0 +1,40 @@
+const helper = {};
+
+// helper function find differenc
+// เอา array 2 ไม่เอา array 1
+// take item which not contain in array 1
+// array2 - array1
+helper.getDiff = (array1, array2) => {
+  function getKey(array) {
+    return [0, 1, 3]
+      .map(function (i) {
+        // console.log(array);
+        // console.log("i : ", i);
+        // console.log("array[i] : ", array[i]);
+        return array[i];
+      })
+      .join("|");
+  }
+
+  let hash = Object.create(null);
+  let result = [];
+
+  array1.forEach(function (a) {
+    let key = getKey(a);
+    hash[key] = true;
+    // console.log(key);
+  });
+  // console.log(JSON.parse(JSON.stringify(hash)));
+
+  result = array2.filter(function (a) {
+    let key = getKey(a);
+    // console.log(key);
+    // console.log(hash[key]);
+    return !hash[key];
+  });
+  return result;
+};
+
+module.exports = {
+  helper: helper,
+};

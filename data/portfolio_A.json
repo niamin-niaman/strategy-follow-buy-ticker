@@ -1,0 +1,52 @@
+[
+    {
+        "Symbol": "AGE",
+        "ActualVol": 200,
+        "AvgCost": 1.89,
+        "MktPrice": 2,
+        "AmountCost": 378,
+        "MarketValue": 400,
+        "UnrealizedPL": 22,
+        "PercentUnrealizedPL": 5.82
+    },
+    {
+        "Symbol": "AOT",
+        "ActualVol": 5,
+        "AvgCost": 60.1,
+        "MktPrice": 67.25,
+        "AmountCost": 300.5,
+        "MarketValue": 336.25,
+        "UnrealizedPL": 35.75,
+        "PercentUnrealizedPL": 11.9
+    },
+    {
+        "Symbol": "INET",
+        "ActualVol": 100,
+        "AvgCost": 3.81,
+        "MktPrice": 4.18,
+        "AmountCost": 381,
+        "MarketValue": 418,
+        "UnrealizedPL": 37,
+        "PercentUnrealizedPL": 9.71
+    },
+    {
+        "Symbol": "NYT",
+        "ActualVol": 100,
+        "AvgCost": 3.53,
+        "MktPrice": 4,
+        "AmountCost": 353,
+        "MarketValue": 400,
+        "UnrealizedPL": 47,
+        "PercentUnrealizedPL": 13.31
+    },
+    {
+        "Symbol": "SC",
+        "ActualVol": 100,
+        "AvgCost": 2.8,
+        "MktPrice": 3.08,
+        "AmountCost": 280,
+        "MarketValue": 308,
+        "UnrealizedPL": 28,
+        "PercentUnrealizedPL": 10
+    }
+]
