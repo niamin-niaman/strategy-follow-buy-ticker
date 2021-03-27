@@ -1,6 +1,9 @@
 // Standard Library
 const puppeteer = require("puppeteer");
 const dotenv = require("dotenv");
+const express = require("express");
+const app = express();
+const port = 1579;
 
 // Local Library
 const { Streaming } = require("../streaming-wrapper-using-puppeteer/src/index");
@@ -12,6 +15,7 @@ const env = dotenv.config().parsed;
 const BROKER = env.BROKER;
 const USER_NAME = env.USER_NAME;
 const PASSWORD = env.PASSWORD;
+// Init local lib
 const line = new Line("3b0L3pLfrq9tdS0Oq2e9w9cTXNBfaYEtJjJZbm953k0");
 const portfolio = new Portfolio(100000);
 
@@ -26,13 +30,14 @@ monitorTicker = (steaming, interval, callback) => {
   setTimeout(async () => {
     setInterval(async () => {
       ticker_data_A = await steaming.getTicker();
-      diff = getDiff(ticker_data_B, ticker_data_A);
+      diff = helper.getDiff(ticker_data_B, ticker_data_A);
       // delete duplicate data
       // let stringArray = diff.map(JSON.stringify);
       // let uniqueStringArray = new Set(stringArray);
       // diff = Array.from(uniqueStringArray, JSON.parse);
       // display data
       // console.log(`[${new Date().toLocaleString()}] : A `);
+      // console.log('Diff : ',diff);
       callback(diff);
     }, interval * 2);
   }, interval);
@@ -40,13 +45,14 @@ monitorTicker = (steaming, interval, callback) => {
   // team  B
   setInterval(async () => {
     ticker_data_B = await steaming.getTicker();
-    diff = getDiff(ticker_data_A, ticker_data_B);
+    diff = helper.getDiff(ticker_data_A, ticker_data_B);
     // delete duplicate data
     // let stringArray = diff.map(JSON.stringify);
     // let uniqueStringArray = new Set(stringArray);
     // diff = Array.from(uniqueStringArray, JSON.parse);
     // display data
     // console.log(`[${new Date().toLocaleString()}] : B `);
+    // console.log('Diff : ',diff);
     callback(diff);
   }, interval * 2);
 };
@@ -61,28 +67,29 @@ getTicker = (raw_ticker) => {
       // console.log(v[0], vol * price);
       return [v[0], v[1], v[2], v[3], vol * price];
     });
-
+    
     // console.log(raw_vol_x_price);
-
+    
     // filter value
     let raw_morethan_x = raw_vol_x_price.filter((v) => {
       return v[4] > price;
     });
-
+    
     // console.log(raw_morethan_x);
     return raw_morethan_x;
   };
-
+  
   // helper function check array empty ?
   isEmpty = (array) => {
     return Array.isArray(array) && (array.length == 0 || array.every(isEmpty));
   };
-
+  
+  let const_morethan_x = costMoreThan(raw_ticker, 1000000);
+  // console.log(const_morethan_x);
+  
   // filter price less than 5
-  let filtered_data = costMoreThan(raw_ticker, 1000000).filter(
-    (v) => parseFloat(v[3]) < 5
-  );
-
+  let filtered_data = const_morethan_x.filter((v) => parseFloat(v[3]) < 5);
+  
   if (!isEmpty(filtered_data)) {
     console.log(`[${new Date().toLocaleString()}]`);
     console.log(filtered_data);
@@ -107,26 +114,31 @@ getTicker = (raw_ticker) => {
     message = "";
 
     let symbols_form_portfolio = portfolio.getPortfolio().map((v) => v.Symbol);
+
     // simulate sell / buy
     filtered_data.forEach((v) => {
       // buy if
       // - has ticker buy
       if (v[1] == "B") {
         // - has no in portfolio
-        if(!symbols_form_portfolio.include(v[0])){
-          // action buy
-          console.log('BUY : ',v[0],' : ',v[3]);
-        }
+        // action buy
+        // if (!symbols_form_portfolio.includes(v[0])) {
+        //   console.log("BUY : ", v[0], " : ", v[3]);
+        //   portfolio.buy(v[0], 100, parseFloat(v[3]));
+        //   console.log(portfolio.getPortfolio());
+        // }
       }
       // sell if
       // - has ticker sell
-      if (v[1] == "S") {
-        // - has in portfolio
-        if(symbols_form_portfolio.include(v[0])){
-          // action sell
-          console.log('SELL : ',v[0],' : ',v[3]);
-        }
-      }
+      // if (v[1] == "S") {
+      //   // - has in portfolio
+      //   // action sell
+      //   if (symbols_form_portfolio.includes(v[0])) {
+      //     console.log("SELL : ", v[0], " : ", v[3]);
+      //     portfolio.sell(v[0], 100, parseFloat(v[3]));
+      //     console.log(portfolio.getPortfolio());
+      //   }
+      // }
     });
 
     TICKER.push(...filtered_data);
@@ -178,7 +190,7 @@ const rankingTicker = () => {
 };
 
 const updateMarketsPrice = async (streaming, portfolio) => {
-  while (true) {
+  // while (true) {
     let symbols = portfolio.getPortfolio().map((v) => v.Symbol);
     for (let index = 0; index < symbols.length; index++) {
       const element = symbols[index];
@@ -187,24 +199,32 @@ const updateMarketsPrice = async (streaming, portfolio) => {
       console.log(price, bid_offer);
       portfolio.updateMktPrice(element, price);
     }
-  }
+  // }
 };
 
 async function main() {
-  const headless = false;
+  const headless = true;
   const browser = await puppeteer.launch({
     headless: headless,
     defaultViewport: null,
   });
 
   const streaming = await new Streaming(browser, BROKER, USER_NAME, PASSWORD);
-  // await streaming.newPage()
+  await streaming.newPage();
 
   monitorTicker(streaming, 2000, getTicker);
 
   // setInterval(() => {
   //   rankingTicker();
   // }, 30000);
+
+  app.get("/check-port", async (req, res) => {
+    console.log("Check port");
+    updateMarketsPrice(streaming,portfolio)
+    console.log(portfolio.getPortfolio());
+    console.log(portfolio.sum);
+    res.send("OK");
+  });
 }
 
 async function expirement() {
@@ -354,7 +374,7 @@ async function expirement() {
   // console.log(getDiff(t_03, t_04));
   // console.log(getDiff(t_04, t_05));
   // console.log(getDiff(t_05, t_06));
-  console.log(helper.getDiff(t_06, t_07));
+  // console.log(helper.getDiff(t_06, t_07));
   // console.log('---');
   // console.log(getDiff(t_02, t_01));
   // console.log(getDiff(t_03, t_02));
@@ -371,6 +391,9 @@ async function expirement() {
 }
 
 if (require.main === module) {
-  // main();
-  expirement();
+  main();
+  // expirement();
+  app.listen(port, () => {
+    console.log(`Example app listening at http://localhost:${port}`);
+  });
 }

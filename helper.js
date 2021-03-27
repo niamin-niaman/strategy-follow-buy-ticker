@@ -6,7 +6,7 @@ const helper = {};
 // array2 - array1
 helper.getDiff = (array1, array2) => {
   function getKey(array) {
-    return [0, 1, 3]
+    return [0, 1, 2, 3, 4]
       .map(function (i) {
         // console.log(array);
         // console.log("i : ", i);
