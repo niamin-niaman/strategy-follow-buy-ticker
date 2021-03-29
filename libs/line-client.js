@@ -35,19 +35,19 @@ class Line {
     let message = "";
     message = new Date().toLocaleTimeString() + "\n";
     ticker_data.forEach((v) => {
-      let side = v[1] == "B" ? "ซื้อ" : "ขาย";
+      let side = v.side == "B" ? "ซื้อ" : v.side == "S" ? "ขาย" : " - ";
       let s =
         side +
         " " +
-        v[0] +
+        v.symbol +
         " ราคา " +
-        v[3] +
+        v.price +
         " มูลค่า " +
-        v[4].toLocaleString() +
+        v.cost.toLocaleString() +
         // format with comma 1000 -> 1,000
         " บาท " +
         "คิดเป็น " +
-        v[5] +
+        v.percent_volume +
         " % ของวัน\n";
       message = message.concat(s);
     });
