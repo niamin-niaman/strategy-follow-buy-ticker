@@ -124,29 +124,6 @@ getTicker = async (raw_ticker, streaming) => {
   if (!isEmpty(filtered_data)) {
     console.log(`[${new Date().toLocaleString()}]`);
     console.log(filtered_data);
-    // Prepare message for sending
-    let message = "";
-    message = new Date().toLocaleTimeString() + "\n";
-    filtered_data.forEach((v) => {
-      let side = v[1] == "B" ? "ซื้อ" : "ขาย";
-      let s =
-        side +
-        " " +
-        v[0] +
-        " ราคา " +
-        v[3] +
-        " มูลค่า " +
-        v[4].toLocaleString() +
-        // format with comma 1000 -> 1,000
-        " บาท " +
-        "คิดเป็น " +
-        v[5] +
-        " % ของวัน\n";
-      message = message.concat(s);
-    });
-    line.sendMessage(message);
-    // console.log(message);
-    message = "";
 
     let symbols_form_portfolio = portfolio.getPortfolio().map((v) => v.Symbol);
 
