@@ -19,7 +19,7 @@ const PASSWORD = env.PASSWORD;
 const line = new Line("3b0L3pLfrq9tdS0Oq2e9w9cTXNBfaYEtJjJZbm953k0");
 const portfolio = new Portfolio(100000);
 
-monitorTicker = (steaming, interval, callback) => {
+monitorTicker = (streaming, interval, callback) => {
   // let interval = 1000;
 
   let ticker_data_A = [];
@@ -29,7 +29,7 @@ monitorTicker = (steaming, interval, callback) => {
   // team A
   setTimeout(async () => {
     setInterval(async () => {
-      ticker_data_A = await steaming.getTicker();
+      ticker_data_A = await streaming.getTicker();
       diff = helper.getDiff(ticker_data_B, ticker_data_A);
       // delete duplicate data
       // let stringArray = diff.map(JSON.stringify);
@@ -38,13 +38,13 @@ monitorTicker = (steaming, interval, callback) => {
       // display data
       // console.log(`[${new Date().toLocaleString()}] : A `);
       // console.log('Diff : ',diff);
-      callback(diff);
+      callback(diff, streaming);
     }, interval * 2);
   }, interval);
 
   // team  B
   setInterval(async () => {
-    ticker_data_B = await steaming.getTicker();
+    ticker_data_B = await streaming.getTicker();
     diff = helper.getDiff(ticker_data_A, ticker_data_B);
     // delete duplicate data
     // let stringArray = diff.map(JSON.stringify);
@@ -53,11 +53,11 @@ monitorTicker = (steaming, interval, callback) => {
     // display data
     // console.log(`[${new Date().toLocaleString()}] : B `);
     // console.log('Diff : ',diff);
-    callback(diff);
+    callback(diff, streaming);
   }, interval * 2);
 };
 
-getTicker = (raw_ticker) => {
+getTicker = async (raw_ticker, streaming) => {
   // hepler function filter ticker has money morethan x
   costMoreThan = (array, price) => {
     // compute vol * price
@@ -67,29 +67,60 @@ getTicker = (raw_ticker) => {
       // console.log(v[0], vol * price);
       return [v[0], v[1], v[2], v[3], vol * price];
     });
-    
+
     // console.log(raw_vol_x_price);
-    
+
     // filter value
     let raw_morethan_x = raw_vol_x_price.filter((v) => {
       return v[4] > price;
     });
-    
+
     // console.log(raw_morethan_x);
     return raw_morethan_x;
   };
-  
+
   // helper function check array empty ?
   isEmpty = (array) => {
     return Array.isArray(array) && (array.length == 0 || array.every(isEmpty));
   };
-  
+
+  // filter out DW by symbol length morethan 7
+  raw_ticker = raw_ticker.filter((v) => v[0].length < 7);
+
   let const_morethan_x = costMoreThan(raw_ticker, 1000000);
   // console.log(const_morethan_x);
-  
+
   // filter price less than 5
   let filtered_data = const_morethan_x.filter((v) => parseFloat(v[3]) < 5);
-  
+
+  // calculate percent of value
+  // https://flaviocopes.com/how-to-get-index-in-for-of-loop/
+  for await (const [i, v] of filtered_data.entries()) {
+    const { price, bid_offer, detail } = await streaming.getQuote(v[0], 1);
+    console.log("detail : ", detail[1]);
+    console.log("--value--");
+    let parse_value = parseFloat(
+      detail[1][1][1].replace(new RegExp(",", "g"), "")
+    );
+    let total_value = parse_value * 10000;
+    let percent_value = (v[4] / total_value).toFixed(3);
+    console.log("ticker_value : ", v[4]);
+    console.log("parse_value :", parse_value);
+    console.log("total_value : ", total_value);
+    console.log("percent_value : ", percent_value);
+    // volume calculate
+    console.log("--volume");
+    let total_volume = parseInt(
+      detail[1][0][1].replace(new RegExp(",", "g"), "")
+    );
+    let ticker_volume = parseInt(v[2].replace(new RegExp(",", "g"), ""));
+    let percent_volume = (ticker_volume / total_volume).toFixed(3);
+    console.log("ticker_volume : ", ticker_volume);
+    console.log("total_volume : ", total_volume);
+    console.log("percent_volume : ", percent_volume);
+    filtered_data[i].push(percent_volume);
+  }
+
   if (!isEmpty(filtered_data)) {
     console.log(`[${new Date().toLocaleString()}]`);
     console.log(filtered_data);
@@ -106,7 +137,11 @@ getTicker = (raw_ticker) => {
         v[3] +
         " มูลค่า " +
         v[4].toLocaleString() +
-        " บาท \n";
+        // format with comma 1000 -> 1,000
+        " บาท " +
+        "คิดเป็น " +
+        v[5] +
+        " % ของวัน\n";
       message = message.concat(s);
     });
     line.sendMessage(message);
@@ -119,15 +154,15 @@ getTicker = (raw_ticker) => {
     filtered_data.forEach((v) => {
       // buy if
       // - has ticker buy
-      if (v[1] == "B") {
-        // - has no in portfolio
-        // action buy
-        // if (!symbols_form_portfolio.includes(v[0])) {
-        //   console.log("BUY : ", v[0], " : ", v[3]);
-        //   portfolio.buy(v[0], 100, parseFloat(v[3]));
-        //   console.log(portfolio.getPortfolio());
-        // }
-      }
+      // if (v[1] == "B") {
+      // - has no in portfolio
+      // action buy
+      // if (!symbols_form_portfolio.includes(v[0])) {
+      //   console.log("BUY : ", v[0], " : ", v[3]);
+      //   portfolio.buy(v[0], 100, parseFloat(v[3]));
+      //   console.log(portfolio.getPortfolio());
+      // }
+      // }
       // sell if
       // - has ticker sell
       // if (v[1] == "S") {
@@ -191,19 +226,19 @@ const rankingTicker = () => {
 
 const updateMarketsPrice = async (streaming, portfolio) => {
   // while (true) {
-    let symbols = portfolio.getPortfolio().map((v) => v.Symbol);
-    for (let index = 0; index < symbols.length; index++) {
-      const element = symbols[index];
-      console.log(element);
-      let [price, bid_offer] = await streaming.getQuote(element, 1);
-      console.log(price, bid_offer);
-      portfolio.updateMktPrice(element, price);
-    }
+  let symbols = portfolio.getPortfolio().map((v) => v.Symbol);
+  for (let index = 0; index < symbols.length; index++) {
+    const element = symbols[index];
+    console.log(element);
+    let [price, bid_offer] = await streaming.getQuote(element, 1);
+    console.log(price, bid_offer);
+    portfolio.updateMktPrice(element, price);
+  }
   // }
 };
 
 async function main() {
-  const headless = true;
+  const headless = false;
   const browser = await puppeteer.launch({
     headless: headless,
     defaultViewport: null,
@@ -220,7 +255,7 @@ async function main() {
 
   app.get("/check-port", async (req, res) => {
     console.log("Check port");
-    updateMarketsPrice(streaming,portfolio)
+    updateMarketsPrice(streaming, portfolio);
     console.log(portfolio.getPortfolio());
     console.log(portfolio.sum);
     res.send("OK");
@@ -388,6 +423,15 @@ async function expirement() {
   // updateMarketsPrice(streaming, portfolio, false)
   // }, 10000);
   // console.log(portfolio.getPortfolio());
+
+  // PASRE INT / FLOAT
+
+  // s = "82,089,100";
+  // console.log(s);
+  // s = s.replace(new RegExp(",", "g"), "");
+  // console.log(s);
+  // console.log(parseInt(s));
+  // console.log(parseFloat(s));
 }
 
 if (require.main === module) {
