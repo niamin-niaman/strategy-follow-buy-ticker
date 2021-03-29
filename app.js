@@ -97,33 +97,24 @@ getTicker = async (raw_ticker, streaming) => {
   // https://flaviocopes.com/how-to-get-index-in-for-of-loop/
   for await (const [i, v] of filtered_data.entries()) {
     const { price, bid_offer, detail } = await streaming.getQuote(v[0], 1);
-    console.log("detail : ", detail[1]);
-    console.log("--value--");
-    let parse_value = parseFloat(
-      detail[1][1][1].replace(new RegExp(",", "g"), "")
-    );
-    let total_value = parse_value * 10000;
-    let percent_value = (v[4] / total_value).toFixed(3);
-    console.log("ticker_value : ", v[4]);
-    console.log("parse_value :", parse_value);
-    console.log("total_value : ", total_value);
-    console.log("percent_value : ", percent_value);
     // volume calculate
-    console.log("--volume");
+    // console.log("--volume");
     let total_volume = parseInt(
       detail[1][0][1].replace(new RegExp(",", "g"), "")
     );
     let ticker_volume = parseInt(v[2].replace(new RegExp(",", "g"), ""));
     let percent_volume = (ticker_volume / total_volume).toFixed(3);
-    console.log("ticker_volume : ", ticker_volume);
-    console.log("total_volume : ", total_volume);
-    console.log("percent_volume : ", percent_volume);
+    // console.log("ticker_volume : ", ticker_volume);
+    // console.log("total_volume : ", total_volume);
+    // console.log("percent_volume : ", percent_volume);
     filtered_data[i].push(percent_volume);
   }
 
   if (!isEmpty(filtered_data)) {
     console.log(`[${new Date().toLocaleString()}]`);
     console.log(filtered_data);
+    // Prepare message  and sending
+    line.formatNsendMessage(filtered_data);
 
     let symbols_form_portfolio = portfolio.getPortfolio().map((v) => v.Symbol);
 
