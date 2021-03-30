@@ -76,6 +76,7 @@ const monitorTicker = (streaming, interval, callback) => {
 // receive function from monitor function and do something with occur ticker
 const getTicker = async (raw_ticker, streaming) => {
   // helper function convert toFixed return float
+  // https://stackoverflow.com/a/29494612/13080067
   function toFixedNumber(num, digits, base) {
     var pow = Math.pow(base || 10, digits);
     return Math.round(num * pow) / pow;
@@ -97,17 +98,15 @@ const getTicker = async (raw_ticker, streaming) => {
     // console.log(raw_morethan_x);
     return raw_morethan_x;
   };
-
   // helper function check array empty ?
   const isEmpty = (array) => {
     return Array.isArray(array) && (array.length == 0 || array.every(isEmpty));
   };
-
   // filter out DW by symbol length morethan 7
   raw_ticker = raw_ticker.filter((v) => v.symbol.length < 8);
 
   let const_morethan_x = costMoreThan(raw_ticker, 1000000);
-  console.log(const_morethan_x);
+  // console.log(const_morethan_x);
 
   // filter price less than 5
   let filtered_data = const_morethan_x.filter((v) => v.price < 5);
@@ -136,30 +135,30 @@ const getTicker = async (raw_ticker, streaming) => {
 
     let symbols_form_portfolio = portfolio.getPortfolio().map((v) => v.Symbol);
 
-    // simulate sell / buy
+    // TODO filter out duplicate data prevent buy morethan 100 volume
+
+    // loop over ticker for simulate sell / buy
     filtered_data.forEach((v) => {
-      // buy if
+      // BUY if
       // - has ticker buy
-      // if (v[1] == "B") {
-      // - has no in portfolio
-      // action buy
-      // if (!symbols_form_portfolio.includes(v[0])) {
-      //   console.log("BUY : ", v[0], " : ", v[3]);
-      //   portfolio.buy(v[0], 100, parseFloat(v[3]));
-      //   console.log(portfolio.getPortfolio());
-      // }
-      // }
-      // sell if
+      if (v.side == "B") {
+        // - has no in portfolio
+        if (!symbols_form_portfolio.includes(v.symbol)) {
+          // action buy
+          if (portfolio.buy(v.symbol, 100, v.price)) {
+            portfolio.updateMktPrice(v.symbol, v.price);
+          }
+        }
+      }
+      // SELL if
       // - has ticker sell
-      // if (v[1] == "S") {
-      //   // - has in portfolio
-      //   // action sell
-      //   if (symbols_form_portfolio.includes(v[0])) {
-      //     console.log("SELL : ", v[0], " : ", v[3]);
-      //     portfolio.sell(v[0], 100, parseFloat(v[3]));
-      //     console.log(portfolio.getPortfolio());
-      //   }
-      // }
+      if (v.side == "S") {
+        // - has in portfolio
+        if (symbols_form_portfolio.includes(v.symbol)) {
+          // action sell
+          portfolio.sell(v.symbol, 100, v.price);
+        }
+      }
     });
   }
 };
@@ -170,15 +169,14 @@ const updateMarketsPrice = async (streaming, portfolio) => {
   for (let index = 0; index < symbols.length; index++) {
     const element = symbols[index];
     console.log(element);
-    let [price, bid_offer] = await streaming.getQuote(element, 1);
-    console.log(price, bid_offer);
+    let { price } = await streaming.getQuote(element, 2);
     portfolio.updateMktPrice(element, price);
   }
   // }
 };
 
 async function main() {
-  const headless = false;
+  const headless = true;
   const browser = await puppeteer.launch({
     headless: headless,
     defaultViewport: null,
@@ -186,19 +184,23 @@ async function main() {
 
   const streaming = await new Streaming(browser, BROKER, USER_NAME, PASSWORD);
   // for get qoute
-  await streaming.newPage();
+  await streaming.newPage(); // [1] for getQoute calculate percent of volume
+  await streaming.newPage(); // [2] for checking simulate portfolio
 
   // call interval
   monitorTicker(streaming, 2000, getTicker);
 
   // SECTION SERVER
-  app.get("/check-port", async (req, res) => {
-    console.log("Check port");
-    updateMarketsPrice(streaming, portfolio);
-    console.log(portfolio.getPortfolio());
-    console.log(portfolio.sum);
-    res.send("OK");
+  // get portfolio
+  app.get("/portfolio", async (req, res) => {
+    await updateMarketsPrice(streaming, portfolio);
+    res.json({
+      portfolio: portfolio.getPortfolio(),
+      sum: JSON.parse(JSON.stringify(portfolio.sum)),
+    });
   });
+  
+  // !SECTION /SEVER
 }
 
 async function expirement() {
