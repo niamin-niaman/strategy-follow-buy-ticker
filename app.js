@@ -113,6 +113,9 @@ const getTicker = async (raw_ticker, streaming) => {
   // filter price less than 5
   let filtered_data = const_morethan_x.filter((v) => v.price < 5);
 
+  // TODO[epic=TICKER CLASS,seq=2] try of seperate instance of TICKER for analysis instead of analyse in this function
+  // TICKER.add(raw_ticker)
+
   // calculate percent of value
   // https://flaviocopes.com/how-to-get-index-in-for-of-loop/
   // for await (const v of filtered_data) {
@@ -139,7 +142,11 @@ const getTicker = async (raw_ticker, streaming) => {
 
     // filter out duplicate data prevent buy morethan 100 volume
     // https://gist.github.com/juliovedovatto/f4ac657e5d28e060c791f5ef27b13341
-    filtered_data = ({ symbol, price }) => ({ symbol, price }(filtered_data));
+    filtered_data.map((v) => ({
+      symbol: v.symbol,
+      side: v.side,
+      price: v.price,
+    }));
     filtered_data = filtered_data
       .map(JSON.stringify)
       .reverse() // convert to JSON string the array content, then reverse it (to check from end to begining)
@@ -177,6 +184,9 @@ const getTicker = async (raw_ticker, streaming) => {
   }
 };
 
+// ANCHOR trailing stop
+// TODO trailing stop function
+
 // ANCHOR while loop check marketprice in portfolio
 // SECTION
 // variable for trigger while loop
@@ -195,7 +205,9 @@ const eventLoopQueue = () => {
 const monitorPorfolioMarketPrice = async (streaming, portfolio) => {
   console.log("portfolio_monitor : ", portfolio_monitor);
   while (portfolio_monitor) {
+    // get all symbol from port folio
     let symbols = portfolio.getPortfolio().map((v) => v.Symbol);
+    // loop over symbol to check price in streaming
     for (let index = 0; index < symbols.length; index++) {
       const element = symbols[index];
       console.log(element);
@@ -214,7 +226,9 @@ const monitorPorfolioMarketPrice = async (streaming, portfolio) => {
 // !SECTION
 
 async function main() {
-  const headless = true;
+  // get cmd arg that setting headless
+  let argv = process.argv.slice(2);
+  const headless = true && argv[0] == "false" ? false : true;
   const browser = await puppeteer.launch({
     headless: headless,
     defaultViewport: null,
@@ -224,9 +238,18 @@ async function main() {
   // for get qoute
   await streaming.newPage(); // [1] for getQoute calculate percent of volume
   await streaming.newPage(); // [2] for checking simulate portfolio
+  // TODO duplicate new window instead of tabs
 
   // call interval
   monitorTicker(streaming, 2000, getTicker);
+
+  // SECTION TICKER
+
+  // TODO[epic=TICKER CLASS,seq=3] enable ticker callback when ticker alert with some citeria
+  // continuousely ticker
+  // ticker morethan 1 million
+
+  // !SECTION
 
   // SECTION SERVER
   // get portfolio
@@ -252,6 +275,8 @@ async function main() {
     });
     res.send("portfolio_monitor : " + portfolio_monitor + "");
   });
+
+  // TODO request to export
 
   // !SECTION /SEVER
 }
