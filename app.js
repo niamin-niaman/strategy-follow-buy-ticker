@@ -10,16 +10,18 @@ const { Streaming } = require("../streaming-wrapper-using-puppeteer/src/index");
 const { Line } = require("./libs/line-client");
 const { Portfolio } = require("./libs/portfolio");
 const { helper } = require("./helper");
+
 // Credential
 const env = dotenv.config().parsed;
 const BROKER = env.BROKER;
 const USER_NAME = env.USER_NAME;
 const PASSWORD = env.PASSWORD;
+
 // Init local lib
 const line = new Line("3b0L3pLfrq9tdS0Oq2e9w9cTXNBfaYEtJjJZbm953k0");
 const portfolio = new Portfolio(100000);
 
-// interval capture ticker from streaming then send throught callback function
+// ANCHOR interval capture ticker from streaming then send throught callback function
 const monitorTicker = (streaming, interval, callback) => {
   // helper function convert ticker format from array to object
   // ["BANPU","S","100","10",""] -> { symbol : "BANPU" , side : "S" , volume : 100 , price 10}
@@ -73,7 +75,7 @@ const monitorTicker = (streaming, interval, callback) => {
   }, interval * 2);
 };
 
-// receive function from monitor function and do something with occur ticker
+// ANCHOR receive function from monitor function and do something with occur ticker
 const getTicker = async (raw_ticker, streaming) => {
   // helper function convert toFixed return float
   // https://stackoverflow.com/a/29494612/13080067
@@ -146,6 +148,7 @@ const getTicker = async (raw_ticker, streaming) => {
         if (!symbols_form_portfolio.includes(v.symbol)) {
           // action buy
           if (portfolio.buy(v.symbol, 100, v.price)) {
+            console.log("BUY : ", v.symbol);
             portfolio.updateMktPrice(v.symbol, v.price);
           }
         }
@@ -154,8 +157,9 @@ const getTicker = async (raw_ticker, streaming) => {
       // - has ticker sell
       if (v.side == "S") {
         // - has in portfolio
+        // action sell
         if (symbols_form_portfolio.includes(v.symbol)) {
-          // action sell
+          console.log("SELL : ", v.symbol);
           portfolio.sell(v.symbol, 100, v.price);
         }
       }
@@ -163,17 +167,41 @@ const getTicker = async (raw_ticker, streaming) => {
   }
 };
 
-const updateMarketsPrice = async (streaming, portfolio) => {
-  // while (true) {
-  let symbols = portfolio.getPortfolio().map((v) => v.Symbol);
-  for (let index = 0; index < symbols.length; index++) {
-    const element = symbols[index];
-    console.log(element);
-    let { price } = await streaming.getQuote(element, 2);
-    portfolio.updateMktPrice(element, price);
-  }
-  // }
+// ANCHOR while loop check marketprice in portfolio
+// SECTION
+// variable for trigger while loop
+let portfolio_monitor = false;
+
+const eventLoopQueue = () => {
+  return new Promise((resolve) =>
+    setImmediate(() => {
+      // console.log("event loop");
+      // process.stdout.write(".");
+      resolve();
+    })
+  );
 };
+
+const monitorPorfolioMarketPrice = async (streaming, portfolio) => {
+  console.log("portfolio_monitor : ", portfolio_monitor);
+  while (portfolio_monitor) {
+    let symbols = portfolio.getPortfolio().map((v) => v.Symbol);
+    for (let index = 0; index < symbols.length; index++) {
+      const element = symbols[index];
+      console.log(element);
+      let { price } = await streaming.getQuote(element, 2);
+      try {
+        portfolio.updateMktPrice(element, price);
+      } catch (error) {
+        console.log("Error : ", error.message);
+      }
+    }
+    // non-blocking while loop
+    await eventLoopQueue();
+  }
+};
+
+// !SECTION
 
 async function main() {
   const headless = true;
@@ -193,158 +221,69 @@ async function main() {
   // SECTION SERVER
   // get portfolio
   app.get("/portfolio", async (req, res) => {
-    await updateMarketsPrice(streaming, portfolio);
-    res.json({
-      portfolio: portfolio.getPortfolio(),
-      sum: JSON.parse(JSON.stringify(portfolio.sum)),
-    });
+    try {
+      res.json({
+        portfolio: portfolio.getPortfolio(),
+        lineAvailable: portfolio.lineAvailable,
+        sum: JSON.parse(JSON.stringify(portfolio.sum)),
+      });
+    } catch (error) {
+      console.log("Error : ", error.message);
+      res.send("null");
+    }
   });
-  
+
+  // toggle monitor portfoilo
+  app.get("/toggle-monitor-portfolio", (req, res) => {
+    console.log("update portfolio");
+    portfolio_monitor = !portfolio_monitor;
+    monitorPorfolioMarketPrice(streaming, portfolio).then(() => {
+      // console.log("portfolio_monitor");
+    });
+    res.send("portfolio_monitor : " + portfolio_monitor + "");
+  });
+
   // !SECTION /SEVER
 }
 
 async function expirement() {
-  // INTERVALTIME
-  // setTimeout(() => {
-  //     // console.log('timeout');
-  //     setInterval(() => {
-  //         console.log('A', new Date());
-  //     }, 2000);
-  // }, 1000);
-
-  // setInterval(() => {
-  //     console.log('B', new Date());
-  // }, 2000);
-
-  // FIND DIFF
-  // let Ticker_A = [
-  //     [1],
-  //     [2]
-  // ]
-
-  // let Ticker_B = [
-
-  //     [2],
-  //     [3]
-  // ]
-  // console.log('DIFF A , B');
-  // console.log(getDiff(Ticker_A, Ticker_B));
-  // console.log('DIFF B , A');
-  // console.log(getDiff(Ticker_B, Ticker_A));
-  // let diff = [...getDiff(Ticker_A, Ticker_B), ...getDiff(Ticker_B, Ticker_A)]
-  // console.log(diff);
-
-  // SUM ARRAY OF ARRAY
-  // let diff = [['JMT', 'S', '30,600', '46.75', '']]
-
-  // compute vol * price
-  // let raw_vol_x_price = diff.map((v) => {
-  //     let vol = parseFloat(v[2].replace(',', ''))
-  //     let price = parseFloat(v[3])
-  //     // console.log(v[0], vol * price);
-  //     return [v[0], v[1], vol * price]
-  // })
-
-  // console.log(raw_vol_x_price);
-
-  // let raw_morethan_1000 = raw_vol_x_price.filter((v) => {
-  //     return v[2] > 10000
-  // })
-
-  // console.log(raw_morethan_1000);
-
-  // SEND LINE MESSAGE
-  // const line = new Line('3b0L3pLfrq9tdS0Oq2e9w9cTXNBfaYEtJjJZbm953k0');
-  // line.sendMessage('a\na')
-
-  // comma number
-
-  // let sort_buy_ticker = [
-  //     ['PTG', 'B', 3526000],
-  //     ['PLANB', 'B', 1196790],
-  //     ['PLANB', 'B', 1196790],
-  //     ['PTT', 'B', 1006250]
-  // ]
-
-  // let message = 'อันดับ Ticker ที่มีการซื้อมากที่สุด\n'
-
-  // sort_buy_ticker.forEach((v) => {
-  //     let s = '' + v[0] + ' มูลค่า ' + v[2].toLocaleString() + '\n'
-  //     message = message.concat(s)
-  // })
-
-  // console.log(message)
-
-  // let s = 'อันดับ Ticker ที่ซ์้อมากที่สุด\
-  //  PTG มูลลค่า 3,526,000 บาท\
-  //  PLANB มูลค่า 1,196,790 บาท '
-
-  //  console.log(s);
-
-  // UPDATE MARKETPRICE
-  // const headless = false;
-  // const browser = await puppeteer.launch({
-  //   headless: headless,
-  //   defaultViewport: null,
-  // });
-
-  // const streaming = await new Streaming(browser, BROKER, USER_NAME, PASSWORD);
-  // await streaming.newPage();
-
-  // Mock data
-  // portfolio.buy("BANPU", 100, 11.3);
-  // portfolio.buy("JAS", 100, 2.9);
-
-  // updateMarketsPrice(streaming, portfolio, true);
-
-  // let symbols = portfolio.getPortfolio().map((v) => v.Symbol)
-  // for (let index = 0; index < symbols.length; index++) {
-  //     const element = symbols[index];
-  //     console.log(element);
-  //     let [price, bid_offer] = await streaming.getQuote(element, 1)
-  //     console.log(price, bid_offer);
-  //     portfolio.updateMktPrice(element, price)
-
-  // }
-
-  let t_01 = [[], [], [], [], [], [], [], [], []];
+  // let t_01 = [[], [], [], [], [], [], [], [], []];
   // at t_01
   // +-+-+-+-+-+-+-+-+-+  +-+-+-+
   // | | | | | | | | | |  | | | |
   // +-+-+-+-+-+-+-+-+-+  +-+-+-+
-  let t_02 = [["A"], ["B"], ["C"], [], [], [], [], [], []];
+  // let t_02 = [["A"], ["B"], ["C"], [], [], [], [], [], []];
   // at t_02
   // +-+-+-+-+-+-+-+-+-+  +-+-+-+
   // |A|B|C| | | | | | |  |A|B|C|
   // +-+-+-+-+-+-+-+-+-+  +-+-+-+
-  let t_03 = [["A"], ["B"], ["C"], ["D"], ["E"], ["F"], [], [], []];
+  // let t_03 = [["A"], ["B"], ["C"], ["D"], ["E"], ["F"], [], [], []];
   // at t_03
   // +-+-+-+-+-+-+-+-+-+  +-+-+-+
   // |A|B|C|D|E|F| | | |  |D|E|F|
   // +-+-+-+-+-+-+-+-+-+  +-+-+-+
-  let t_04 = [["A"], ["B"], ["C"], ["D"], ["E"], ["F"], ["G"], ["H"], ["I"]];
+  // let t_04 = [["A"], ["B"], ["C"], ["D"], ["E"], ["F"], ["G"], ["H"], ["I"]];
   // at t_04
   // +-+-+-+-+-+-+-+-+-+  +-+-+-+
   // |A|B|C|D|E|F|G|H|I|  |G|H|I|
   // +-+-+-+-+-+-+-+-+-+  +-+-+-+
-  let t_05 = [["J"], ["K"], ["L"], ["D"], ["E"], ["F"], ["G"], ["H"], ["I"]];
+  // let t_05 = [["J"], ["K"], ["L"], ["D"], ["E"], ["F"], ["G"], ["H"], ["I"]];
   // at t_05
   // +-+-+-+-+-+-+-+-+-+  +-+-+-+
   // |J|K|L|D|E|F|G|H|I|  |J|K|L|
   // +-+-+-+-+-+-+-+-+-+  +-+-+-+
-  let t_06 = [["J"], ["K"], ["L"], ["M"], ["N"], ["O"], ["G"], ["H"], ["I"]];
+  // let t_06 = [["J"], ["K"], ["L"], ["M"], ["N"], ["O"], ["G"], ["H"], ["I"]];
   // let t_06 = [["J","a","b","c","d"], ["K","a","b","c","d"], ["L","a","b","c","d"], ["M","a","b","c","d"], ["N","a","b","c","d"], ["O","a","b","c","d"], ["G","a","b","c","d"], ["H","a","b","c","d"], ["I","a","b","c","d"]];
   // at t_06
   // +-+-+-+-+-+-+-+-+-+  +-+-+-+
   // |J|K|L|M|N|O|G|H|I|  |M|N|O|
   // +-+-+-+-+-+-+-+-+-+  +-+-+-+
-  let t_07 = [["S"], ["T"], ["L"], ["M"], ["N"], ["O"], ["P"], ["Q"], ["R"]];
+  // let t_07 = [["S"], ["T"], ["L"], ["M"], ["N"], ["O"], ["P"], ["Q"], ["R"]];
   // let t_07 = [["S","a","b","c","d"], ["T","a","b","c","d"], ["L","a","b","c","d"], ["M","a","b","c","d"], ["N","a","b","c","d"], ["O","a","b","c","d"], ["P","a","b","c","d"], ["Q","a","b","c","d"], ["R","a","b","c","d"]];
   // at t_07
   // +-+-+-+-+-+-+-+-+-+  +-+-+-+-+-+
   // |S|T|L|M|N|O|P|Q|R|  |P|Q|R|S|T|
   // +-+-+-+-+-+-+-+-+-+  +-+-+-+-+-+
-
   // console.log(getDiff(t_01, t_02));
   // console.log(getDiff(t_02, t_03));
   // console.log(getDiff(t_03, t_04));
@@ -358,15 +297,7 @@ async function expirement() {
   // console.log(getDiff(t_05, t_04));
   // console.log(getDiff(t_06, t_05));
   // console.log(getDiff(t_07, t_06));
-
-  // setTimeout(() => {
-  //   console.log("turn off");
-  // updateMarketsPrice(streaming, portfolio, false)
-  // }, 10000);
-  // console.log(portfolio.getPortfolio());
-
   // PASRE INT / FLOAT
-
   // s = "82,089,100";
   // console.log(s);
   // s = s.replace(new RegExp(",", "g"), "");
