@@ -1,10 +1,13 @@
 const fs = require("fs");
 const { helper } = require("./helper");
-class Portfolio {
-  constructor(lineAvailable) {
+const EventEmitter = require("events");
+class Portfolio extends EventEmitter {
+  constructor(lineAvailable, percentStoploss) {
+    // EventEmitter Class
+    super();
     this.lineAvailable = lineAvailable;
     // default % stoploss 1 %
-    this.percentStoploss = 0.01;
+    this.percentStoploss = 0.01 || percentStoploss / 100;
     this.portfolio = [];
 
     Object.defineProperty(this, "sum", {
@@ -32,6 +35,12 @@ class Portfolio {
         return object;
       },
     });
+  }
+
+  // set stoploss v : is 1 %
+  set stoploss(v) {
+    // convert to 1 -> 0.01
+    return (this.percentStoploss = v / 100);
   }
 
   // import data
@@ -146,6 +155,10 @@ class Portfolio {
         2
       );
     }
+    // check stoploss if price less than stoploss
+    if (price < this.portfolio[i].stoploss) {
+      this.emit("hitStopLoss", symbol, price);
+    }
     return true;
   }
 
@@ -153,6 +166,14 @@ class Portfolio {
     // console.log(JSON.parse(JSON.stringify(this.portfolio)));
     return JSON.parse(JSON.stringify(this.portfolio));
     // return JSON.parse(JSON.stringify(this));
+  }
+
+  getSymbol(symbol) {
+    return JSON.parse(
+      JSON.stringify(
+        this.portfolio[this.portfolio.findIndex((x) => x.Symbol == symbol)]
+      )
+    );
   }
 }
 
@@ -205,12 +226,28 @@ class Symbol {
 const main = async () => {
   // helper function
 
-  const portfolio = new Portfolio(5000);
+  const portfolio = new Portfolio(5000, 2);
+
+  portfolio.on("hitStopLoss", (symbol, price) => {
+    console.log("stop loss ", symbol, " ", price);
+    const s = portfolio.getSymbol(symbol);
+    portfolio.sell(symbol, s.ActualVol, price);
+  });
 
   console.log(portfolio.getPortfolio());
 
   portfolio.buy("AGE", 200, 1.89);
   portfolio.updateMktPrice("AGE", 2);
+  console.log(portfolio.getPortfolio());
+  portfolio.updateMktPrice("AGE", 3);
+  console.log(portfolio.getPortfolio());
+
+  portfolio.stoploss = 10;
+
+  portfolio.updateMktPrice("AGE", 4);
+  console.log(portfolio.getPortfolio());
+  portfolio.updateMktPrice("AGE", 1);
+  console.log(portfolio.getPortfolio());
   //   portfolio.buy("AOT", 5, 60.1);
   //   portfolio.updateMktPrice("AOT", 67.25);
   //   portfolio.buy("INET", 100, 3.81);
@@ -224,8 +261,6 @@ const main = async () => {
 
   //   portfolio.exportData("./data/portfolio_A.json");
   // portfolio.importData("./data/portfolio_A.json");
-
-  console.log(portfolio.getPortfolio());
 
   // let f = portfolio.getPortfolio().filter(v => v.PercentUnrealizedPL > 10)
   // console.log(f);
