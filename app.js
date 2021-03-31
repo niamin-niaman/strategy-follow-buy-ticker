@@ -9,7 +9,7 @@ const port = 1579;
 const { Streaming } = require("../streaming-wrapper-using-puppeteer/src/index");
 const { Line } = require("./libs/line-client");
 const { Portfolio } = require("./libs/portfolio");
-const { helper } = require("./helper");
+const { helper } = require("./libs/helper");
 
 // Credential
 const env = dotenv.config().parsed;

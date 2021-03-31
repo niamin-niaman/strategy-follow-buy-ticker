@@ -35,6 +35,13 @@ helper.getDiff = (array1, array2) => {
   return result;
 };
 
+// helper function convert toFixed return float
+// https://stackoverflow.com/a/29494612/13080067
+helper.toFixedNumber = (num, digits, base) => {
+  var pow = Math.pow(base || 10, digits);
+  return Math.round(num * pow) / pow;
+};
+
 module.exports = {
   helper: helper,
 };

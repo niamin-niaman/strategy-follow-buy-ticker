@@ -1,13 +1,23 @@
 const fs = require("fs");
-
+const { helper } = require("./helper");
 class Portfolio {
   constructor(lineAvailable) {
     this.lineAvailable = lineAvailable;
+    // default % stoploss 1 %
+    this.percentStoploss = 0.01;
     this.portfolio = [];
 
     Object.defineProperty(this, "sum", {
       enumerable: true,
       get: function () {
+        if (this.portfolio.length <= 1) {
+          return {
+            UnrealizedPL: this.portfolio[0].UnrealizedPL || 0,
+            AmountCost: this.portfolio[0].AmountCost || 0,
+            MarketValue: this.portfolio[0].MarketValue || 0,
+            PercentUnrealizedPL: this.portfolio[0].PercentUnrealizedPL || 0,
+          };
+        }
         // https://stackoverflow.com/a/35480841/13080067
         let object = this.portfolio.reduce((preVal, curVal) => ({
           UnrealizedPL: preVal.UnrealizedPL + curVal.UnrealizedPL,
@@ -86,6 +96,8 @@ class Portfolio {
       s.Symbol = symbol;
       s.ActualVol = vol;
       s.AvgCost = price;
+      // set stop loss
+      s.stoploss = helper.toFixedNumber(price * (1 - this.percentStoploss), 2);
       this.portfolio.push(s);
     }
 
@@ -122,9 +134,18 @@ class Portfolio {
 
   updateMktPrice(symbol, price) {
     // https://stackoverflow.com/a/44048398/13080067
-    this.portfolio[
-      this.portfolio.findIndex((x) => x.Symbol == symbol)
-    ].MktPrice = parseFloat(price);
+    const i = this.portfolio.findIndex((x) => x.Symbol == symbol);
+    const MktPrice = parseFloat(price);
+    this.portfolio[i].MktPrice = MktPrice;
+    // then update stoploss
+    // - check if new stoploss highter than older stop loss
+    // - - then update new one
+    if (MktPrice * (1 - this.percentStoploss) > this.portfolio[i].stoploss) {
+      this.portfolio[i].stoploss = helper.toFixedNumber(
+        MktPrice * (1 - this.percentStoploss),
+        2
+      );
+    }
     return true;
   }
 
@@ -175,6 +196,9 @@ class Symbol {
         );
       },
     });
+
+    // add stoploss
+    this.stoploss = 0;
   }
 }
 
@@ -185,8 +209,8 @@ const main = async () => {
 
   console.log(portfolio.getPortfolio());
 
-  //   portfolio.buy("AGE", 200, 1.89);
-  //   portfolio.updateMktPrice("AGE", 2);
+  portfolio.buy("AGE", 200, 1.89);
+  portfolio.updateMktPrice("AGE", 2);
   //   portfolio.buy("AOT", 5, 60.1);
   //   portfolio.updateMktPrice("AOT", 67.25);
   //   portfolio.buy("INET", 100, 3.81);
@@ -199,7 +223,7 @@ const main = async () => {
   //   console.log(portfolio.getPortfolio());
 
   //   portfolio.exportData("./data/portfolio_A.json");
-  portfolio.importData("./data/portfolio_A.json");
+  // portfolio.importData("./data/portfolio_A.json");
 
   console.log(portfolio.getPortfolio());
 
@@ -207,7 +231,7 @@ const main = async () => {
   // console.log(f);
   // let l = portfolio.getPortfolio().map(v => v.Symbol)
   // console.log(l);
-  console.log(JSON.parse(JSON.stringify(portfolio.sum)));
+  // console.log(JSON.parse(JSON.stringify(portfolio.sum)));
 };
 
 if (require.main === module) {
