@@ -102,6 +102,13 @@ const getTicker = async (raw_ticker, streaming) => {
   // filter out DW by symbol length morethan 7
   raw_ticker = raw_ticker.filter((v) => v.symbol.length < 8);
 
+  // compute volume * price
+  raw_ticker.forEach((v, i) => {
+    raw_ticker[i].cost = v.volume * v.price;
+  });
+
+  // 
+
   let const_morethan_x = costMoreThan(raw_ticker, 1000000);
   // console.log(const_morethan_x);
 
