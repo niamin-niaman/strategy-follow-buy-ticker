@@ -9,6 +9,7 @@ const port = 1579;
 const { Streaming } = require("../streaming-wrapper-using-puppeteer/src/index");
 const { Line } = require("./libs/line-client");
 const { Portfolio } = require("./libs/portfolio");
+const { Ticker } = require("./libs/ticker");
 const { helper } = require("./libs/helper");
 
 // Credential
@@ -20,6 +21,7 @@ const PASSWORD = env.PASSWORD;
 // Init local lib
 const line = new Line("3b0L3pLfrq9tdS0Oq2e9w9cTXNBfaYEtJjJZbm953k0");
 const portfolio = new Portfolio(100000);
+const ticker = new Ticker();
 
 // ANCHOR interval capture ticker from streaming then send throught callback function
 const monitorTicker = (streaming, interval, callback) => {
@@ -77,28 +79,6 @@ const monitorTicker = (streaming, interval, callback) => {
 
 // ANCHOR receive function from monitor function and do something with occur ticker
 const getTicker = async (raw_ticker, streaming) => {
-  // helper function convert toFixed return float
-  // https://stackoverflow.com/a/29494612/13080067
-  function toFixedNumber(num, digits, base) {
-    var pow = Math.pow(base || 10, digits);
-    return Math.round(num * pow) / pow;
-  }
-  // hepler function filter ticker has money morethan x
-  const costMoreThan = (array, price) => {
-    // console.log(raw_vol_x_price);
-
-    // filter value
-    let raw_morethan_x = array.filter((v) => {
-      return v.cost > price;
-    });
-
-    // console.log(raw_morethan_x);
-    return raw_morethan_x;
-  };
-  // helper function check array empty ?
-  const isEmpty = (array) => {
-    return Array.isArray(array) && (array.length == 0 || array.every(isEmpty));
-  };
   // filter out DW by symbol length morethan 7
   raw_ticker = raw_ticker.filter((v) => v.symbol.length < 8);
 
@@ -107,87 +87,10 @@ const getTicker = async (raw_ticker, streaming) => {
     raw_ticker[i].cost = v.volume * v.price;
   });
 
-  // 
+  // push ticker to ticker
+  ticker.push(raw_ticker);
 
-  let const_morethan_x = costMoreThan(raw_ticker, 1000000);
-  // console.log(const_morethan_x);
-
-  // filter price less than 5
-  let filtered_data = const_morethan_x.filter((v) => v.price < 5);
-
-  // TODO[epic=TICKER CLASS,seq=2] try of seperate instance of TICKER for analysis instead of analyse in this function
-  // TICKER.add(raw_ticker)
-
-  // calculate percent of value
-  // https://flaviocopes.com/how-to-get-index-in-for-of-loop/
-  // for await (const v of filtered_data) {
-  for (let i = 0; i < filtered_data.length; i++) {
-    const v = filtered_data[i];
-    const { price, bid_offer, detail } = await streaming.getQuote(v.symbol, 1);
-    // calculate percent volume
-    let total_volume = parseInt(
-      // replace all occurrence ","
-      detail[1][0][1].replace(new RegExp(",", "g"), "")
-    );
-    let percent_volume = toFixedNumber(v.volume / total_volume, 3);
-    filtered_data[i].percent_volume = percent_volume;
-  }
-
-  // action something
-  if (!isEmpty(filtered_data)) {
-    console.log(`[${new Date().toLocaleString()}]`);
-    console.log(filtered_data);
-    // Prepare message  and sending
-    line.formatNsendMessage(filtered_data);
-
-    let symbols_form_portfolio = portfolio.getPortfolio().map((v) => v.Symbol);
-
-    // filter out duplicate data prevent buy morethan 100 volume
-    // https://gist.github.com/juliovedovatto/f4ac657e5d28e060c791f5ef27b13341
-    filtered_data.map((v) => ({
-      symbol: v.symbol,
-      side: v.side,
-      price: v.price,
-    }));
-    filtered_data = filtered_data
-      .map(JSON.stringify)
-      .reverse() // convert to JSON string the array content, then reverse it (to check from end to begining)
-      .filter(function (item, index, arr) {
-        return arr.indexOf(item, index + 1) === -1;
-      }) // check if there is any occurence of the item in whole array
-      .reverse()
-      .map(JSON.parse);
-
-    // loop over ticker for simulate sell / buy
-    filtered_data.forEach((v) => {
-      // BUY if
-      // - has ticker buy
-      if (v.side == "B") {
-        // - has no in portfolio
-        if (!symbols_form_portfolio.includes(v.symbol)) {
-          // action buy
-          if (portfolio.buy(v.symbol, 100, v.price)) {
-            console.log("BUY : ", v.symbol);
-            portfolio.updateMktPrice(v.symbol, v.price);
-          }
-        }
-      }
-      // SELL if
-      // - has ticker sell
-      if (v.side == "S") {
-        // - has in portfolio
-        // action sell
-        if (symbols_form_portfolio.includes(v.symbol)) {
-          console.log("SELL : ", v.symbol);
-          portfolio.sell(v.symbol, 100, v.price);
-        }
-      }
-    });
-  }
 };
-
-// ANCHOR trailing stop
-// TODO trailing stop function
 
 // ANCHOR while loop check marketprice in portfolio
 // SECTION
@@ -240,20 +143,86 @@ async function main() {
   // for get qoute
   await streaming.newPage(); // [1] for getQoute calculate percent of volume
   await streaming.newPage(); // [2] for checking simulate portfolio
-  // TODO duplicate new window instead of tabs
 
+  // SECTION TICKER regiter listener befor moniter ticker
+
+  // sendline
+  ticker.on("costMoreThan1m", async (tickers) => {
+    console.log(`Ticker on sendline :[${new Date().toLocaleString()}]`);
+    tickers = tickers.filter((v) => v.price < 5);
+    console.log(tickers);
+    // calculate percent of value
+    // for await (const v of filtered_data) {
+    for (let i = 0; i < tickers.length; i++) {
+      const v = tickers[i];
+      const { price, bid_offer, detail } = await streaming.getQuote(
+        v.symbol,
+        1
+      );
+      // calculate percent volume
+      let total_volume = parseInt(
+        detail[1][0][1].replace(new RegExp(",", "g"), "")
+      );
+      let percent_volume = helper.toFixedNumber(v.volume / total_volume, 3);
+      tickers[i].percent_volume = percent_volume;
+    }
+    // Prepare message  and sending
+    line.formatNsendMessage(tickers);
+  });
+
+  // simulate buy /sell
+  ticker.on("costMoreThan1m", async (tickers) => {
+    console.log("buy sell");
+    let symbols_form_portfolio = portfolio.getPortfolio().map((v) => v.Symbol);
+
+    // filter out duplicate data prevent buy morethan 100 volume
+    // https://gist.github.com/juliovedovatto/f4ac657e5d28e060c791f5ef27b13341
+    tickers.map((v) => ({
+      symbol: v.symbol,
+      side: v.side,
+      price: v.price,
+    }));
+    tickers = tickers
+      .map(JSON.stringify)
+      .reverse() // convert to JSON string the array content, then reverse it (to check from end to begining)
+      .filter(function (item, index, arr) {
+        return arr.indexOf(item, index + 1) === -1;
+      }) // check if there is any occurence of the item in whole array
+      .reverse()
+      .map(JSON.parse);
+
+    // loop over ticker for simulate sell / buy
+    tickers.forEach((v) => {
+      // BUY if
+      // - has ticker buy
+      if (v.side == "B") {
+        // - has no in portfolio
+        if (!symbols_form_portfolio.includes(v.symbol)) {
+          // action buy
+          if (portfolio.buy(v.symbol, 100, v.price)) {
+            console.log("BUY : ", v.symbol);
+            portfolio.updateMktPrice(v.symbol, v.price);
+          }
+        }
+      }
+      // SELL if
+      // - has ticker sell
+      if (v.side == "S") {
+        // - has in portfolio
+        // action sell
+        if (symbols_form_portfolio.includes(v.symbol)) {
+          console.log("SELL : ", v.symbol);
+          portfolio.sell(v.symbol, 100, v.price);
+        }
+      }
+    });
+  });
+
+  // !SECTION
+
+  // ANCHOR call monitor ticker function
   // call interval
   monitorTicker(streaming, 2000, getTicker);
-
-  // SECTION TICKER
-
-  // TODO[epic=TICKER CLASS,seq=3] enable ticker callback when ticker alert with some citeria
-  // continuousely ticker
-  // ticker morethan 1 million
-
-  // !SECTION
-
-  // !SECTION
 
   // SECTION SERVER
   // get portfolio
