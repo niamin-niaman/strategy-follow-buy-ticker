@@ -42,6 +42,17 @@ helper.toFixedNumber = (num, digits, base) => {
   return Math.round(num * pow) / pow;
 };
 
+// helper function check array of array empty ?
+helper.isEmpty = (array) => {
+  return (
+    Array.isArray(array) && (array.length == 0 || array.every(helper.isEmpty))
+  );
+};
+
+if (require.main === module) {
+  const s = [["s"], ["a"]];
+  console.log(!helper.isEmpty(s));
+}
 module.exports = {
   helper: helper,
 };
