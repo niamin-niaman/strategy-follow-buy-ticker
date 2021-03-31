@@ -24,7 +24,7 @@ const portfolio = new Portfolio(100000);
 // ANCHOR interval capture ticker from streaming then send throught callback function
 const monitorTicker = (streaming, interval, callback) => {
   // helper function convert ticker format from array to object
-  // ["BANPU","S","100","10",""] -> { symbol : "BANPU" , side : "S" , volume : 100 , price 10}
+  // ["BANPU","S","100","10",""] -> { symbol : "BANPU" , side : "S" , volume : 100 , price : 10}
   const convertTickerFormat = (raw_ticker) => {
     // filter out empty data
     raw_ticker = raw_ticker.filter((v) => !(!v[0].trim() || v[0].length === 0));
@@ -85,11 +85,6 @@ const getTicker = async (raw_ticker, streaming) => {
   }
   // hepler function filter ticker has money morethan x
   const costMoreThan = (array, price) => {
-    // compute volume * price
-    array.forEach((v, i) => {
-      array[i].cost = v.volume * v.price;
-    });
-
     // console.log(raw_vol_x_price);
 
     // filter value
@@ -248,6 +243,8 @@ async function main() {
   // TODO[epic=TICKER CLASS,seq=3] enable ticker callback when ticker alert with some citeria
   // continuousely ticker
   // ticker morethan 1 million
+
+  // !SECTION
 
   // !SECTION
 
