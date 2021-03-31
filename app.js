@@ -137,7 +137,17 @@ const getTicker = async (raw_ticker, streaming) => {
 
     let symbols_form_portfolio = portfolio.getPortfolio().map((v) => v.Symbol);
 
-    // TODO filter out duplicate data prevent buy morethan 100 volume
+    // filter out duplicate data prevent buy morethan 100 volume
+    // https://gist.github.com/juliovedovatto/f4ac657e5d28e060c791f5ef27b13341
+    filtered_data = ({ symbol, price }) => ({ symbol, price }(filtered_data));
+    filtered_data = filtered_data
+      .map(JSON.stringify)
+      .reverse() // convert to JSON string the array content, then reverse it (to check from end to begining)
+      .filter(function (item, index, arr) {
+        return arr.indexOf(item, index + 1) === -1;
+      }) // check if there is any occurence of the item in whole array
+      .reverse()
+      .map(JSON.parse);
 
     // loop over ticker for simulate sell / buy
     filtered_data.forEach((v) => {
