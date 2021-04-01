@@ -78,7 +78,7 @@ const monitorTicker = (streaming, interval, callback) => {
 };
 
 // ANCHOR receive function from monitor function and do something with occur ticker
-const getTicker = async (raw_ticker, streaming) => {
+const getTicker = async (raw_ticker) => {
   // filter out DW by symbol length morethan 7
   raw_ticker = raw_ticker.filter((v) => v.symbol.length < 8);
 
@@ -89,7 +89,6 @@ const getTicker = async (raw_ticker, streaming) => {
 
   // push ticker to ticker
   ticker.push(raw_ticker);
-
 };
 
 // ANCHOR while loop check marketprice in portfolio
@@ -116,7 +115,7 @@ const monitorPorfolioMarketPrice = async (streaming, portfolio) => {
     for (let index = 0; index < symbols.length; index++) {
       const element = symbols[index];
       console.log(element);
-      let { price } = await streaming.getQuote(element, 2);
+      let { price } = await streaming.getQuote(element);
       try {
         portfolio.updateMktPrice(element, price);
       } catch (error) {
@@ -139,10 +138,10 @@ async function main() {
     defaultViewport: null,
   });
 
-  const streaming = await new Streaming(browser, BROKER, USER_NAME, PASSWORD);
-  // for get qoute
-  await streaming.newPage(); // [1] for getQoute calculate percent of volume
-  await streaming.newPage(); // [2] for checking simulate portfolio
+  let streaming = [];
+  streaming.push(await new Streaming(browser, BROKER, USER_NAME, PASSWORD)); // [0] for monitor ticker
+  streaming.push(await streaming[0].newPage()); // [1] for getQoute calculate percent of volume
+  streaming.push(await streaming[0].newPage()); // [2] for checking simulate portfolio
 
   // SECTION TICKER regiter listener befor moniter ticker
 
@@ -155,7 +154,7 @@ async function main() {
     // for await (const v of filtered_data) {
     for (let i = 0; i < tickers.length; i++) {
       const v = tickers[i];
-      const { price, bid_offer, detail } = await streaming.getQuote(
+      const { price, bid_offer, detail } = await streaming[1].getQuote(
         v.symbol,
         1
       );
@@ -222,7 +221,7 @@ async function main() {
 
   // ANCHOR call monitor ticker function
   // call interval
-  monitorTicker(streaming, 2000, getTicker);
+  monitorTicker(streaming[0], 2000, getTicker);
 
   // SECTION SERVER
   // get portfolio
@@ -241,9 +240,8 @@ async function main() {
 
   // toggle monitor portfoilo
   app.get("/toggle-monitor-portfolio", (req, res) => {
-    console.log("update portfolio");
     portfolio_monitor = !portfolio_monitor;
-    monitorPorfolioMarketPrice(streaming, portfolio).then(() => {
+    monitorPorfolioMarketPrice(streaming[2], portfolio).then(() => {
       // console.log("portfolio_monitor");
     });
     res.send("portfolio_monitor : " + portfolio_monitor + "");
