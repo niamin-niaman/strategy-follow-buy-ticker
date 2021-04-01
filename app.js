@@ -88,6 +88,8 @@ const getTicker = async (raw_ticker) => {
   });
 
   // push ticker to ticker
+  // TODOS change to push in tmp ticks array. then use while loop with eventQueue to calculate some data from await streamin.
+  // instead of push raw_ticker directly without get some data
   ticker.push(raw_ticker);
 };
 
@@ -129,6 +131,7 @@ const monitorPorfolioMarketPrice = async (streaming, portfolio) => {
 
 // !SECTION
 
+
 async function main() {
   // get cmd arg that setting headless
   let argv = process.argv.slice(2);
@@ -147,80 +150,83 @@ async function main() {
 
   // sendline
   ticker.on("costMoreThan1m", async (tickers) => {
-    console.log(`Ticker on sendline :[${new Date().toLocaleString()}]`);
     tickers = tickers.filter((v) => v.price < 5);
-    console.log(tickers);
     // calculate percent of value
     // for await (const v of filtered_data) {
-    for (let i = 0; i < tickers.length; i++) {
-      const v = tickers[i];
-      const { price, bid_offer, detail } = await streaming[1].getQuote(
-        v.symbol,
-        1
-      );
-      // calculate percent volume
-      let total_volume = parseInt(
-        detail[1][0][1].replace(new RegExp(",", "g"), "")
-      );
-      let percent_volume = helper.toFixedNumber(v.volume / total_volume, 3);
-      tickers[i].percent_volume = percent_volume;
+    if (!helper.isEmpty(tickers)) {
+      for (let i = 0; i < tickers.length; i++) {
+        const v = tickers[i];
+        const { price, bid_offer, detail } = await streaming[1].getQuote(
+          v.symbol
+        );
+        // calculate percent volume
+        let total_volume = parseInt(
+          detail[1][0][1].replace(new RegExp(",", "g"), "")
+        );
+        let percent_volume = helper.toFixedNumber(v.volume / total_volume, 3);
+        tickers[i].percent_volume = percent_volume;
+      }
+
+      console.log(`Ticker on sendline :[${new Date().toLocaleString()}]`);
+      console.log(tickers);
+      // Prepare message  and sending
+      line.formatNsendMessage(tickers);
     }
-    // Prepare message  and sending
-    line.formatNsendMessage(tickers);
   });
 
   // simulate buy /sell
-  ticker.on("costMoreThan1m", async (tickers) => {
-    console.log("buy sell");
-    let symbols_form_portfolio = portfolio.getPortfolio().map((v) => v.Symbol);
+  // ticker.on("costMoreThan1m", async (tickers) => {
+  //   // console.log("\nbuy sell");
+  //   let symbols_form_portfolio = portfolio.getPortfolio().map((v) => v.Symbol);
 
-    // filter out duplicate data prevent buy morethan 100 volume
-    // https://gist.github.com/juliovedovatto/f4ac657e5d28e060c791f5ef27b13341
-    tickers.map((v) => ({
-      symbol: v.symbol,
-      side: v.side,
-      price: v.price,
-    }));
-    tickers = tickers
-      .map(JSON.stringify)
-      .reverse() // convert to JSON string the array content, then reverse it (to check from end to begining)
-      .filter(function (item, index, arr) {
-        return arr.indexOf(item, index + 1) === -1;
-      }) // check if there is any occurence of the item in whole array
-      .reverse()
-      .map(JSON.parse);
+  //   // filter out duplicate data prevent buy morethan 100 volume
+  //   // https://gist.github.com/juliovedovatto/f4ac657e5d28e060c791f5ef27b13341
+  //   tickers.map((v) => ({
+  //     symbol: v.symbol,
+  //     side: v.side,
+  //     price: v.price,
+  //   }));
+  //   tickers = tickers
+  //     .map(JSON.stringify)
+  //     .reverse() // convert to JSON string the array content, then reverse it (to check from end to begining)
+  //     .filter(function (item, index, arr) {
+  //       return arr.indexOf(item, index + 1) === -1;
+  //     }) // check if there is any occurence of the item in whole array
+  //     .reverse()
+  //     .map(JSON.parse);
 
-    // loop over ticker for simulate sell / buy
-    tickers.forEach((v) => {
-      // BUY if
-      // - has ticker buy
-      if (v.side == "B") {
-        // - has no in portfolio
-        if (!symbols_form_portfolio.includes(v.symbol)) {
-          // action buy
-          if (portfolio.buy(v.symbol, 100, v.price)) {
-            console.log("BUY : ", v.symbol);
-            portfolio.updateMktPrice(v.symbol, v.price);
-          }
-        }
-      }
-      // SELL if
-      // - has ticker sell
-      if (v.side == "S") {
-        // - has in portfolio
-        // action sell
-        if (symbols_form_portfolio.includes(v.symbol)) {
-          console.log("SELL : ", v.symbol);
-          portfolio.sell(v.symbol, 100, v.price);
-        }
-      }
-    });
-  });
+  //   // loop over ticker for simulate sell / buy
+  //   tickers.forEach((v) => {
+  //     // BUY if
+  //     // - has ticker buy
+  //     if (v.side == "B") {
+  //       // - has no in portfolio
+  //       if (!symbols_form_portfolio.includes(v.symbol)) {
+  //         // action buy
+  //         if (portfolio.buy(v.symbol, 100, v.price)) {
+  //           console.log("BUY : ", v.symbol);
+  //           portfolio.updateMktPrice(v.symbol, v.price);
+  //         }
+  //       }
+  //     }
+  //     // SELL if
+  //     // - has ticker sell
+  //     if (v.side == "S") {
+  //       // - has in portfolio
+  //       // action sell
+  //       if (symbols_form_portfolio.includes(v.symbol)) {
+  //         console.log("SELL : ", v.symbol);
+  //         portfolio.sell(v.symbol, 100, v.price);
+  //       }
+  //     }
+  //   });
+  // });
 
   // !SECTION
 
   // ANCHOR call monitor ticker function
   // call interval
+  // TODOS can do with https://stackoverflow.com/a/24091927/13080067
   monitorTicker(streaming[0], 2000, getTicker);
 
   // SECTION SERVER
