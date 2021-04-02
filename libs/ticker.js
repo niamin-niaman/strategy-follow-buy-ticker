@@ -13,20 +13,17 @@ class Ticker extends EventEmitter {
 
   push(raw_ticker) {
     //   add timestamp
-    raw_ticker = raw_ticker.map((v) => ({
-      ...v,
-      timeStamp: new Date(),
-    }));
+    raw_ticker["timeStamp"] = new Date();
 
     // store in array ticker
-    this.ticker.push(...raw_ticker);
+    this.ticker.push(raw_ticker);
 
     // SECTION analysis function
 
     // ANCHOR morethan 1 million
-    let ticker_morethan_1m = raw_ticker.filter((v) => v.cost > 1000000);
-    if (!helper.isEmpty(ticker_morethan_1m))
-      this.emit("costMoreThan1m", ticker_morethan_1m);
+    if (raw_ticker.cost > 1000000) {
+      this.emit("costMoreThan1m", raw_ticker);
+    }
 
     // !SECTION
   }
