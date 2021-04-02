@@ -31,27 +31,25 @@ class Line {
   };
 
   //   retrieve array of ticker
-  formatNsendMessage = (ticker_data) => {
+  formatNsendMessage = (raw_ticker) => {
     let message = "";
     message = new Date().toLocaleTimeString() + "\n";
-    ticker_data.forEach((v) => {
-      let side = v.side == "B" ? "ซื้อ" : v.side == "S" ? "ขาย" : " - ";
-      let s =
-        side +
-        " " +
-        v.symbol +
-        " ราคา " +
-        v.price +
-        " มูลค่า " +
-        v.cost.toLocaleString() +
-        // format with comma 1000 -> 1,000
-        " บาท " +
-        "คิดเป็น " +
-        v.percent_volume +
-        " % ของวัน\n";
-      message = message.concat(s);
-    });
-
+    let side =
+      raw_ticker.side == "B" ? "ซื้อ" : raw_ticker.side == "S" ? "ขาย" : " - ";
+    let s =
+      side +
+      " " +
+      raw_ticker.symbol +
+      " ราคา " +
+      raw_ticker.price +
+      " มูลค่า " +
+      raw_ticker.cost.toLocaleString() +
+      // format with comma 1000 -> 1,000
+      " บาท " +
+      "คิดเป็น " +
+      raw_ticker.percent_volume +
+      " % ของวัน\n";
+    message = message.concat(s);
     this.sendMessage(message);
   };
 }
