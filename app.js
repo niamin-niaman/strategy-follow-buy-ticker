@@ -4,6 +4,7 @@ const dotenv = require("dotenv");
 const express = require("express");
 const app = express();
 const port = 1579;
+const events = require("events");
 
 // Local Library
 const { Streaming } = require("../streaming-wrapper-using-puppeteer/src/index");
@@ -18,13 +19,16 @@ const BROKER = env.BROKER;
 const USER_NAME = env.USER_NAME;
 const PASSWORD = env.PASSWORD;
 
+// Init standard lib
+const event = new events.EventEmitter();
+
 // Init local lib
 const line = new Line("3b0L3pLfrq9tdS0Oq2e9w9cTXNBfaYEtJjJZbm953k0");
 const portfolio = new Portfolio(100000);
 const ticker = new Ticker();
 
 // ANCHOR interval capture ticker from streaming then send throught callback function
-const monitorTicker = (streaming, interval, callback) => {
+const monitorTicker = (streaming, interval) => {
   // helper function convert ticker format from array to object
   // ["BANPU","S","100","10",""] -> { symbol : "BANPU" , side : "S" , volume : 100 , price : 10}
   const convertTickerFormat = (raw_ticker) => {
@@ -58,7 +62,8 @@ const monitorTicker = (streaming, interval, callback) => {
       // display data
       // console.log(`[${new Date().toLocaleString()}] : A `);
       // console.log('Diff : ',diff);
-      callback(convertTickerFormat(diff), streaming);
+      // emit event
+      event.emit("tickers", convertTickerFormat(diff));
     }, interval * 2);
   }, interval);
 
@@ -73,24 +78,9 @@ const monitorTicker = (streaming, interval, callback) => {
     // display data
     // console.log(`[${new Date().toLocaleString()}] : B `);
     // console.log('Diff : ',diff);
-    callback(convertTickerFormat(diff), streaming);
+    // emit event
+    event.emit("tickers", convertTickerFormat(diff));
   }, interval * 2);
-};
-
-// ANCHOR receive function from monitor function and do something with occur ticker
-const getTicker = async (raw_ticker) => {
-  // filter out DW by symbol length morethan 7
-  raw_ticker = raw_ticker.filter((v) => v.symbol.length < 8);
-
-  // compute volume * price
-  raw_ticker.forEach((v, i) => {
-    raw_ticker[i].cost = v.volume * v.price;
-  });
-
-  // push ticker to ticker
-  // TODOS change to push in tmp ticks array. then use while loop with eventQueue to calculate some data from await streamin.
-  // instead of push raw_ticker directly without get some data
-  ticker.push(raw_ticker);
 };
 
 // ANCHOR while loop check marketprice in portfolio
@@ -131,6 +121,44 @@ const monitorPorfolioMarketPrice = async (streaming, portfolio) => {
 
 // !SECTION
 
+// SECTION calculate ticker
+// declar global ticker
+const TICKERS = [];
+
+// function that while loop get globalticker
+// then get data from streaming for calculate
+let isFinish = true;
+const calculateTicker = async (streaming) => {
+  while (!helper.isEmpty(TICKERS)) {
+    isFinish = false;
+    let raw_ticker = TICKERS.shift();
+    // console.log(raw_ticker);
+    const { price, bid_offer, detail } = await streaming.getQuote(
+      raw_ticker.symbol
+    );
+
+    // calculate percent volume
+    let total_volume = parseInt(
+      detail[1][0][1].replace(new RegExp(",", "g"), "")
+    );
+    let percent_volume = helper.toFixedNumber(
+      raw_ticker.volume / total_volume,
+      3
+    );
+
+    raw_ticker["percent_volume"] = percent_volume;
+
+    ticker.push(raw_ticker);
+    await eventLoopQueue();
+  }
+  isFinish = true;
+};
+
+const callCalculateTicker = (streaming) => {
+  if (isFinish) calculateTicker(streaming);
+};
+
+// !SECTION
 
 async function main() {
   // get cmd arg that setting headless
@@ -149,85 +177,98 @@ async function main() {
   // SECTION TICKER regiter listener befor moniter ticker
 
   // sendline
-  ticker.on("costMoreThan1m", async (tickers) => {
-    tickers = tickers.filter((v) => v.price < 5);
-    // calculate percent of value
-    // for await (const v of filtered_data) {
-    if (!helper.isEmpty(tickers)) {
-      for (let i = 0; i < tickers.length; i++) {
-        const v = tickers[i];
-        const { price, bid_offer, detail } = await streaming[1].getQuote(
-          v.symbol
-        );
-        // calculate percent volume
-        let total_volume = parseInt(
-          detail[1][0][1].replace(new RegExp(",", "g"), "")
-        );
-        let percent_volume = helper.toFixedNumber(v.volume / total_volume, 3);
-        tickers[i].percent_volume = percent_volume;
-      }
-
-      console.log(`Ticker on sendline :[${new Date().toLocaleString()}]`);
-      console.log(tickers);
-      // Prepare message  and sending
-      line.formatNsendMessage(tickers);
-    }
+  ticker.on("costMoreThan1m", async (ticker) => {
+    console.log(`Ticker on sendline :[${new Date().toLocaleString()}]`);
+    console.log(ticker);
+    line.formatNsendMessage(ticker);
   });
 
   // simulate buy /sell
-  // ticker.on("costMoreThan1m", async (tickers) => {
-  //   // console.log("\nbuy sell");
-  //   let symbols_form_portfolio = portfolio.getPortfolio().map((v) => v.Symbol);
+  ticker.on("costMoreThan1m_", async (tickers) => {
+    // console.log("\nbuy sell");
+    let symbols_form_portfolio = portfolio.getPortfolio().map((v) => v.Symbol);
 
-  //   // filter out duplicate data prevent buy morethan 100 volume
-  //   // https://gist.github.com/juliovedovatto/f4ac657e5d28e060c791f5ef27b13341
-  //   tickers.map((v) => ({
-  //     symbol: v.symbol,
-  //     side: v.side,
-  //     price: v.price,
-  //   }));
-  //   tickers = tickers
-  //     .map(JSON.stringify)
-  //     .reverse() // convert to JSON string the array content, then reverse it (to check from end to begining)
-  //     .filter(function (item, index, arr) {
-  //       return arr.indexOf(item, index + 1) === -1;
-  //     }) // check if there is any occurence of the item in whole array
-  //     .reverse()
-  //     .map(JSON.parse);
+    // filter out duplicate data prevent buy morethan 100 volume
+    // https://gist.github.com/juliovedovatto/f4ac657e5d28e060c791f5ef27b13341
+    tickers.map((v) => ({
+      symbol: v.symbol,
+      side: v.side,
+      price: v.price,
+    }));
+    tickers = tickers
+      .map(JSON.stringify)
+      .reverse() // convert to JSON string the array content, then reverse it (to check from end to begining)
+      .filter(function (item, index, arr) {
+        return arr.indexOf(item, index + 1) === -1;
+      }) // check if there is any occurence of the item in whole array
+      .reverse()
+      .map(JSON.parse);
 
-  //   // loop over ticker for simulate sell / buy
-  //   tickers.forEach((v) => {
-  //     // BUY if
-  //     // - has ticker buy
-  //     if (v.side == "B") {
-  //       // - has no in portfolio
-  //       if (!symbols_form_portfolio.includes(v.symbol)) {
-  //         // action buy
-  //         if (portfolio.buy(v.symbol, 100, v.price)) {
-  //           console.log("BUY : ", v.symbol);
-  //           portfolio.updateMktPrice(v.symbol, v.price);
-  //         }
-  //       }
-  //     }
-  //     // SELL if
-  //     // - has ticker sell
-  //     if (v.side == "S") {
-  //       // - has in portfolio
-  //       // action sell
-  //       if (symbols_form_portfolio.includes(v.symbol)) {
-  //         console.log("SELL : ", v.symbol);
-  //         portfolio.sell(v.symbol, 100, v.price);
-  //       }
-  //     }
-  //   });
-  // });
+    // loop over ticker for simulate sell / buy
+    tickers.forEach((v) => {
+      // BUY if
+      // - has ticker buy
+      if (v.side == "B") {
+        // - has no in portfolio
+        if (!symbols_form_portfolio.includes(v.symbol)) {
+          // action buy
+          if (portfolio.buy(v.symbol, 100, v.price)) {
+            console.log("BUY : ", v.symbol);
+            portfolio.updateMktPrice(v.symbol, v.price);
+          }
+        }
+      }
+      // SELL if
+      // - has ticker sell
+      if (v.side == "S") {
+        // - has in portfolio
+        // action sell
+        if (symbols_form_portfolio.includes(v.symbol)) {
+          console.log("SELL : ", v.symbol);
+          portfolio.sell(v.symbol, 100, v.price);
+        }
+      }
+    });
+  });
+
+  // !SECTION
+
+  // SECTION register event
+
+  /**
+   * when ticker alert.it will filter out 
+   * 1. price < 5 bath
+   * 2. cost > 1 million
+   */
+  event.on("tickers", (raw_tickers) => {
+    // console.log(`Event on tickers : [${new Date().toLocaleString()}]`);
+    // console.log(raw_tickers);
+
+    // filter out DW by symbol length morethan 7
+    raw_tickers = raw_tickers.filter((v) => v.symbol.length < 8);
+
+    // compute volume * price
+    raw_tickers.forEach((v, i) => {
+      raw_tickers[i].cost = v.volume * v.price;
+    });
+
+    // price less than 5 bath
+    raw_tickers = raw_tickers.filter((v) => v.price < 6);
+
+    // ticker.push(raw_tickers);
+    raw_tickers.forEach((v) => {
+      TICKERS.push(v);
+    });
+
+    callCalculateTicker(streaming[1]);
+  });
 
   // !SECTION
 
   // ANCHOR call monitor ticker function
   // call interval
   // TODOS can do with https://stackoverflow.com/a/24091927/13080067
-  monitorTicker(streaming[0], 2000, getTicker);
+  monitorTicker(streaming[0], 2000);
 
   // SECTION SERVER
   // get portfolio
@@ -253,12 +294,58 @@ async function main() {
     res.send("portfolio_monitor : " + portfolio_monitor + "");
   });
 
+  // get all TICKERS
+  app.get("/get-ticker", (req, res) => {
+    res.json(TICKERS);
+  });
+
   // TODO request to export
 
   // !SECTION /SEVER
 }
 
 async function expirement() {
+  let argv = process.argv.slice(2);
+  const headless = true && argv[0] == "false" ? false : true;
+  const browser = await puppeteer.launch({
+    headless: headless,
+    defaultViewport: null,
+  });
+
+  let streaming = [];
+  streaming.push(await new Streaming(browser, BROKER, USER_NAME, PASSWORD)); // [0] for monitor ticker
+
+  // LOOP OVER GLOBAL TICKER
+  callCalculateTicker(streaming[0]);
+
+  // setInterval(() => {
+  //   TICKERS.push({
+  //     symbol: "AOT",
+  //     side: "S",
+  //     volume: 100,
+  //     price: 10,
+  //     cost: 20000000,
+  //   });
+
+  // }, 1500);
+
+  app.get("/ticker", (req, res) => {
+    TICKERS.push({
+      symbol: "AOT",
+      side: "S",
+      volume: 100,
+      price: 10,
+      cost: 20000000,
+    });
+    callCalculateTicker(streaming[0]);
+    // console.log(isFinish);
+    res.send(isFinish);
+  });
+
+  app.get("/get-ticker", (req, res) => {
+    res.json(TICKERS);
+  });
+
   // let t_01 = [[], [], [], [], [], [], [], [], []];
   // at t_01
   // +-+-+-+-+-+-+-+-+-+  +-+-+-+
