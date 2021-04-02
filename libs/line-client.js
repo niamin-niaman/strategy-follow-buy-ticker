@@ -31,24 +31,31 @@ class Line {
   };
 
   //   retrieve array of ticker
-  formatNsendMessage = (raw_ticker) => {
+  formatNsendMessage = (t) => {
     let message = "";
     message = new Date().toLocaleTimeString() + "\n";
-    let side =
-      raw_ticker.side == "B" ? "ซื้อ" : raw_ticker.side == "S" ? "ขาย" : " - ";
+    let side = t.side == "B" ? "ซื้อ" : t.side == "S" ? "ขาย" : " - ";
+    // let s =
+    //   side +
+    //   " " +
+    //   t.symbol +
+    //   " ราคา " +
+    //   t.price +
+    //   " มูลค่า " +
+    //   t.cost.toLocaleString() +
+    //   // format with comma 1000 -> 1,000
+    //   " บาท \n" +
+    //   "คิดเป็น " +
+    //   t.percent_day_volume +
+    //   " % ของวัน "+
+    //   "volume ทั้งเป็น \n";
+
+    // prettier-ignore
     let s =
-      side +
-      " " +
-      raw_ticker.symbol +
-      " ราคา " +
-      raw_ticker.price +
-      " มูลค่า " +
-      raw_ticker.cost.toLocaleString() +
-      // format with comma 1000 -> 1,000
-      " บาท " +
-      "คิดเป็น " +
-      raw_ticker.percent_day_volume +
-      " % ของวัน\n";
+`${side} ${t.symbol} ราคา ${t.price} บาท มูลค่า ${t.cost.toLocaleString()} บาท
+คิดเป็น ${t.percent_day_volume} % ของวัน volume ทั้งวันคิดเป็น ${t.percent_5d_avg_volume} % ของค่าเฉลี่ย 5 วัน 
+ซื้อ ${t.percent_symbol_buy} % ขาย ${t.percent_symbol_sell} %`;
+
     message = message.concat(s);
     this.sendMessage(message);
   };
