@@ -47,7 +47,7 @@ class Line {
       // format with comma 1000 -> 1,000
       " บาท " +
       "คิดเป็น " +
-      raw_ticker.percent_volume +
+      raw_ticker.percent_day_volume +
       " % ของวัน\n";
     message = message.concat(s);
     this.sendMessage(message);

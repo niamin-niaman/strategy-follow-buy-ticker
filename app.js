@@ -133,21 +133,54 @@ const calculateTicker = async (streaming) => {
     isFinish = false;
     let raw_ticker = TICKERS.shift();
     // console.log(raw_ticker);
-    const { price, bid_offer, detail } = await streaming.getQuote(
-      raw_ticker.symbol
-    );
+    const {
+      price,
+      bid_offer,
+      detail,
+      by_date,
+      symbol_percent_buy_sell,
+      sector_percent_buy_sell,
+      market_percent_buy_sell,
+    } = await streaming.getQuote(raw_ticker.symbol);
 
     // calculate percent volume
-    let total_volume = parseInt(
+    let total_day_volume = parseInt(
       detail[1][0][1].replace(new RegExp(",", "g"), "")
     );
-    let percent_volume = helper.toFixedNumber(
-      raw_ticker.volume / total_volume,
-      3
+    let percent_day_volume = helper.toFixedNumber(
+      raw_ticker.volume / total_day_volume,
+      2
     );
 
-    raw_ticker["percent_volume"] = percent_volume;
+    // calculate 5d avg volume
+    let avg_5d_volume = parseInt(
+      by_date
+        .slice(0, 5)
+        .reduce(
+          (sum, v, _, { length }) =>
+            sum + parseInt(v[5].replace(new RegExp(",", "g"), "")) / length,
+          0
+        )
+    );
 
+    let percent_5d_avg_volume = helper.toFixedNumber(
+      total_day_volume / avg_5d_volume,
+      2
+    );
+
+    console.log("avg_5d_volume : ", avg_5d_volume);
+
+    raw_ticker["total_day_volume"] = total_day_volume;
+    raw_ticker["percent_day_volume"] = parseInt(percent_day_volume * 100);
+    raw_ticker["avg_5d_volume"] = avg_5d_volume;
+    raw_ticker["percent_5d_avg_volume"] = parseInt(percent_5d_avg_volume * 100);
+    raw_ticker["percent_symbol_buy"] = parseInt(
+      symbol_percent_buy_sell[1][0].match(/\d+/g)
+    );
+    raw_ticker["percent_symbol_sell"] = parseInt(
+      symbol_percent_buy_sell[1][2].match(/\d+/g)
+    );
+    console.log(raw_ticker);
     ticker.push(raw_ticker);
     await eventLoopQueue();
   }
