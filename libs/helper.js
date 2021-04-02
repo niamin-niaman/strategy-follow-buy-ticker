@@ -43,6 +43,7 @@ helper.toFixedNumber = (num, digits, base) => {
 };
 
 // helper function check array of array empty ?
+// if array empty return true
 helper.isEmpty = (array) => {
   return (
     Array.isArray(array) && (array.length == 0 || array.every(helper.isEmpty))
