@@ -184,51 +184,15 @@ async function main() {
   });
 
   // simulate buy /sell
-  ticker.on("costMoreThan1m_", async (tickers) => {
-    // console.log("\nbuy sell");
+  ticker.on("costMoreThan1m_", async (ticker) => {
+    console.log(`Ticker on sendline :[${new Date().toLocaleString()}]`);
     let symbols_form_portfolio = portfolio.getPortfolio().map((v) => v.Symbol);
-
-    // filter out duplicate data prevent buy morethan 100 volume
-    // https://gist.github.com/juliovedovatto/f4ac657e5d28e060c791f5ef27b13341
-    tickers.map((v) => ({
-      symbol: v.symbol,
-      side: v.side,
-      price: v.price,
-    }));
-    tickers = tickers
-      .map(JSON.stringify)
-      .reverse() // convert to JSON string the array content, then reverse it (to check from end to begining)
-      .filter(function (item, index, arr) {
-        return arr.indexOf(item, index + 1) === -1;
-      }) // check if there is any occurence of the item in whole array
-      .reverse()
-      .map(JSON.parse);
-
-    // loop over ticker for simulate sell / buy
-    tickers.forEach((v) => {
-      // BUY if
-      // - has ticker buy
-      if (v.side == "B") {
-        // - has no in portfolio
-        if (!symbols_form_portfolio.includes(v.symbol)) {
-          // action buy
-          if (portfolio.buy(v.symbol, 100, v.price)) {
-            console.log("BUY : ", v.symbol);
-            portfolio.updateMktPrice(v.symbol, v.price);
-          }
-        }
-      }
-      // SELL if
-      // - has ticker sell
-      if (v.side == "S") {
-        // - has in portfolio
-        // action sell
-        if (symbols_form_portfolio.includes(v.symbol)) {
-          console.log("SELL : ", v.symbol);
-          portfolio.sell(v.symbol, 100, v.price);
-        }
-      }
-    });
+    if(ticker.side == "B"){
+      // buy
+    }
+    if(ticker.side == "S"){
+      // sell
+    }
   });
 
   // !SECTION
@@ -236,7 +200,7 @@ async function main() {
   // SECTION register event
 
   /**
-   * when ticker alert.it will filter out 
+   * when ticker alert.it will filter out
    * 1. price < 5 bath
    * 2. cost > 1 million
    */
@@ -254,6 +218,7 @@ async function main() {
 
     // price less than 5 bath
     raw_tickers = raw_tickers.filter((v) => v.price < 6);
+    raw_tickers = raw_tickers.filter((v) => v.cost > 500000);
 
     // ticker.push(raw_tickers);
     raw_tickers.forEach((v) => {
