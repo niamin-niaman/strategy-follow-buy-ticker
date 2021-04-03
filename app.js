@@ -26,7 +26,7 @@ const event = new events.EventEmitter();
 
 // Init local lib
 const line = new Line("3b0L3pLfrq9tdS0Oq2e9w9cTXNBfaYEtJjJZbm953k0");
-const portfolio = new Portfolio(100000);
+const portfolio = new Portfolio(100000, 2);
 const ticker = new Ticker();
 
 /*
@@ -242,14 +242,18 @@ async function main() {
   });
 
   // simulate buy /sell
-  ticker.on("costMoreThan1m_", async (ticker) => {
+  ticker.on("costMoreThan1m", async (ticker) => {
     console.log(`Ticker on sendline :[${new Date().toLocaleString()}]`);
     let symbols_form_portfolio = portfolio.getPortfolio().map((v) => v.Symbol);
-    if (ticker.side == "B") {
-      // buy
+    if (ticker.side == "B" && !symbols_form_portfolio.includes(ticker.symbol)) {
+      // buy on offer
+      console.log("BUY : ", ticker.symbol, " ", ticker.price);
+      portfolio.buy(ticker.symbol, 100, ticker.price);
     }
-    if (ticker.side == "S") {
-      // sell
+    if (ticker.side == "S" && symbols_form_portfolio.includes(ticker.symbol)) {
+      // sell on bid
+      console.log("SELL : ", ticker.symbol, " ", ticker.price);
+      portfolio.sell(ticker.symbol, 100, ticker.price);
     }
   });
 
@@ -292,6 +296,20 @@ async function main() {
 
     // call calculate ticker
     callCalculateTicker(streaming[1]);
+  });
+
+  // !SECTION
+
+  /*
+  +---------------------------------+
+  | SECTION PORTFOLIO register event |
+  +---------------------------------+
+  */
+
+  portfolio.on("hitStopLoss", (symbol, price) => {
+    console.log(symbol, " hit stoploss as ", price);
+    console.log("SELL : ", ticker.symbol, " ", ticker.price);
+    portfolio.sell(symbol, 100, price);
   });
 
   // !SECTION
@@ -353,7 +371,6 @@ async function main() {
 }
 
 async function expirement() {
-
   // let argv = process.argv.slice(2);
   // const headless = true && argv[0] == "false" ? false : true;
   // const browser = await puppeteer.launch({
