@@ -2,7 +2,9 @@
 const puppeteer = require("puppeteer");
 const dotenv = require("dotenv");
 const express = require("express");
+const bodyParser = require("body-parser");
 const app = express();
+app.use(bodyParser.urlencoded({ extended: true }));
 const port = 1579;
 const events = require("events");
 
@@ -27,7 +29,11 @@ const line = new Line("3b0L3pLfrq9tdS0Oq2e9w9cTXNBfaYEtJjJZbm953k0");
 const portfolio = new Portfolio(100000);
 const ticker = new Ticker();
 
-// ANCHOR interval capture ticker from streaming then send throught callback function
+/*
++-------------------------------------------------------------------------------------+
+| ANCHOR interval capture ticker from streaming then send throught callback function  |
++-------------------------------------------------------------------------------------+
+*/
 const monitorTicker = (streaming, interval) => {
   // helper function convert ticker format from array to object
   // ["BANPU","S","100","10",""] -> { symbol : "BANPU" , side : "S" , volume : 100 , price : 10}
@@ -43,6 +49,7 @@ const monitorTicker = (streaming, interval) => {
       side: v[1],
       volume: parseInt(v[2].replace(new RegExp(",", "g"), "")),
       price: parseFloat(v[3]),
+      time_stamp: new Date(),
     }));
   };
 
@@ -83,8 +90,12 @@ const monitorTicker = (streaming, interval) => {
   }, interval * 2);
 };
 
-// ANCHOR while loop check marketprice in portfolio
-// SECTION
+/*
++---------------------------------------------------+
+| ANCHOR while loop check marketprice in portfolio  |
+| SECTION                                           |
++---------------------------------------------------+
+*/
 // variable for trigger while loop
 let portfolio_monitor = false;
 
@@ -121,7 +132,11 @@ const monitorPorfolioMarketPrice = async (streaming, portfolio) => {
 
 // !SECTION
 
-// SECTION calculate ticker
+/*
++---------------------------+
+| SECTION calculate ticker  |
++---------------------------+
+*/
 // declar global ticker
 const TICKERS = [];
 
@@ -168,7 +183,7 @@ const calculateTicker = async (streaming) => {
       2
     );
 
-    console.log("avg_5d_volume : ", avg_5d_volume);
+    // console.log("avg_5d_volume : ", avg_5d_volume);
 
     raw_ticker["total_day_volume"] = total_day_volume;
     raw_ticker["percent_day_volume"] = parseInt(percent_day_volume * 100);
@@ -202,12 +217,22 @@ async function main() {
     defaultViewport: null,
   });
 
+  /*
+  +------------------------+
+  | initail streaming page |
+  +------------------------+ 
+  */
+
   let streaming = [];
   streaming.push(await new Streaming(browser, BROKER, USER_NAME, PASSWORD)); // [0] for monitor ticker
   streaming.push(await streaming[0].newPage()); // [1] for getQoute calculate percent of volume
   streaming.push(await streaming[0].newPage()); // [2] for checking simulate portfolio
 
-  // SECTION TICKER regiter listener befor moniter ticker
+  /*
+  +------------------------------------------------------+
+  | SECTION TICKER regiter listener befor moniter ticker |
+  +------------------------------------------------------+
+  */
 
   // sendline
   ticker.on("costMoreThan1m", async (ticker) => {
@@ -220,23 +245,30 @@ async function main() {
   ticker.on("costMoreThan1m_", async (ticker) => {
     console.log(`Ticker on sendline :[${new Date().toLocaleString()}]`);
     let symbols_form_portfolio = portfolio.getPortfolio().map((v) => v.Symbol);
-    if(ticker.side == "B"){
+    if (ticker.side == "B") {
       // buy
     }
-    if(ticker.side == "S"){
+    if (ticker.side == "S") {
       // sell
     }
   });
 
   // !SECTION
 
-  // SECTION register event
+  /*
+  +---------------------------------+
+  | SECTION INTERVAL register event |
+  +---------------------------------+
+  */
 
   /**
    * when ticker alert.it will filter out
    * 1. price < 5 bath
    * 2. cost > 1 million
    */
+  // threshold before sending to calculate ticker
+  let price_threshold = 6;
+  let cost_threshold = 500000;
   event.on("tickers", (raw_tickers) => {
     // console.log(`Event on tickers : [${new Date().toLocaleString()}]`);
     // console.log(raw_tickers);
@@ -250,25 +282,34 @@ async function main() {
     });
 
     // price less than 5 bath
-    raw_tickers = raw_tickers.filter((v) => v.price < 6);
-    raw_tickers = raw_tickers.filter((v) => v.cost > 500000);
+    raw_tickers = raw_tickers.filter((v) => v.price < price_threshold);
+    raw_tickers = raw_tickers.filter((v) => v.cost > cost_threshold);
 
-    // ticker.push(raw_tickers);
+    // push raw_ticker to global ticker for calculate ticker
     raw_tickers.forEach((v) => {
       TICKERS.push(v);
     });
 
+    // call calculate ticker
     callCalculateTicker(streaming[1]);
   });
 
   // !SECTION
 
-  // ANCHOR call monitor ticker function
+  /*
+  +-------------------------------------+
+  | ANCHOR call monitor ticker function |
+  +-------------------------------------+
+  */
   // call interval
   // TODOS can do with https://stackoverflow.com/a/24091927/13080067
   monitorTicker(streaming[0], 2000);
 
-  // SECTION SERVER
+  /*
+  +----------------+
+  | SECTION SERVER |
+  +----------------+
+  */
   // get portfolio
   app.get("/portfolio", async (req, res) => {
     try {
@@ -297,26 +338,42 @@ async function main() {
     res.json(TICKERS);
   });
 
+  // set new threshold price & cost
+  app.get("/set-threshold", (req, res) => {
+    cost_threshold = req.query.cost || cost_threshold;
+    price_threshold = req.query.price || price_threshold;
+    console.log("cost : ", cost);
+    console.log("price : ", price);
+    res.send("ok");
+  });
+
   // TODO request to export
 
   // !SECTION /SEVER
 }
 
 async function expirement() {
-  let argv = process.argv.slice(2);
-  const headless = true && argv[0] == "false" ? false : true;
-  const browser = await puppeteer.launch({
-    headless: headless,
-    defaultViewport: null,
-  });
 
-  let streaming = [];
-  streaming.push(await new Streaming(browser, BROKER, USER_NAME, PASSWORD)); // [0] for monitor ticker
-
-  // LOOP OVER GLOBAL TICKER
-  callCalculateTicker(streaming[0]);
-
-  // setInterval(() => {
+  // let argv = process.argv.slice(2);
+  // const headless = true && argv[0] == "false" ? false : true;
+  // const browser = await puppeteer.launch({
+  //   headless: headless,
+  //   defaultViewport: null,
+  // });
+  // let streaming = [];
+  // streaming.push(await new Streaming(browser, BROKER, USER_NAME, PASSWORD)); // [0] for monitor ticker
+  // // LOOP OVER GLOBAL TICKER
+  // callCalculateTicker(streaming[0]);
+  // // setInterval(() => {
+  // //   TICKERS.push({
+  // //     symbol: "AOT",
+  // //     side: "S",
+  // //     volume: 100,
+  // //     price: 10,
+  // //     cost: 20000000,
+  // //   });
+  // // }, 1500);
+  // app.get("/ticker", (req, res) => {
   //   TICKERS.push({
   //     symbol: "AOT",
   //     side: "S",
@@ -324,26 +381,13 @@ async function expirement() {
   //     price: 10,
   //     cost: 20000000,
   //   });
-
-  // }, 1500);
-
-  app.get("/ticker", (req, res) => {
-    TICKERS.push({
-      symbol: "AOT",
-      side: "S",
-      volume: 100,
-      price: 10,
-      cost: 20000000,
-    });
-    callCalculateTicker(streaming[0]);
-    // console.log(isFinish);
-    res.send(isFinish);
-  });
-
-  app.get("/get-ticker", (req, res) => {
-    res.json(TICKERS);
-  });
-
+  //   callCalculateTicker(streaming[0]);
+  //   // console.log(isFinish);
+  //   res.send(isFinish);
+  // });
+  // app.get("/get-ticker", (req, res) => {
+  //   res.json(TICKERS);
+  // });
   // let t_01 = [[], [], [], [], [], [], [], [], []];
   // at t_01
   // +-+-+-+-+-+-+-+-+-+  +-+-+-+
@@ -370,42 +414,20 @@ async function expirement() {
   // |J|K|L|D|E|F|G|H|I|  |J|K|L|
   // +-+-+-+-+-+-+-+-+-+  +-+-+-+
   // let t_06 = [["J"], ["K"], ["L"], ["M"], ["N"], ["O"], ["G"], ["H"], ["I"]];
-  // let t_06 = [["J","a","b","c","d"], ["K","a","b","c","d"], ["L","a","b","c","d"], ["M","a","b","c","d"], ["N","a","b","c","d"], ["O","a","b","c","d"], ["G","a","b","c","d"], ["H","a","b","c","d"], ["I","a","b","c","d"]];
   // at t_06
   // +-+-+-+-+-+-+-+-+-+  +-+-+-+
   // |J|K|L|M|N|O|G|H|I|  |M|N|O|
   // +-+-+-+-+-+-+-+-+-+  +-+-+-+
   // let t_07 = [["S"], ["T"], ["L"], ["M"], ["N"], ["O"], ["P"], ["Q"], ["R"]];
-  // let t_07 = [["S","a","b","c","d"], ["T","a","b","c","d"], ["L","a","b","c","d"], ["M","a","b","c","d"], ["N","a","b","c","d"], ["O","a","b","c","d"], ["P","a","b","c","d"], ["Q","a","b","c","d"], ["R","a","b","c","d"]];
   // at t_07
   // +-+-+-+-+-+-+-+-+-+  +-+-+-+-+-+
   // |S|T|L|M|N|O|P|Q|R|  |P|Q|R|S|T|
   // +-+-+-+-+-+-+-+-+-+  +-+-+-+-+-+
-  // console.log(getDiff(t_01, t_02));
-  // console.log(getDiff(t_02, t_03));
-  // console.log(getDiff(t_03, t_04));
-  // console.log(getDiff(t_04, t_05));
-  // console.log(getDiff(t_05, t_06));
-  // console.log(helper.getDiff(t_06, t_07));
-  // console.log('---');
-  // console.log(getDiff(t_02, t_01));
-  // console.log(getDiff(t_03, t_02));
-  // console.log(getDiff(t_04, t_03));
-  // console.log(getDiff(t_05, t_04));
-  // console.log(getDiff(t_06, t_05));
-  // console.log(getDiff(t_07, t_06));
-  // PASRE INT / FLOAT
-  // s = "82,089,100";
-  // console.log(s);
-  // s = s.replace(new RegExp(",", "g"), "");
-  // console.log(s);
-  // console.log(parseInt(s));
-  // console.log(parseFloat(s));
 }
 
 if (require.main === module) {
-  main();
-  // expirement();
+  // main();
+  expirement();
   app.listen(port, () => {
     console.log(`listening at http://localhost:${port}`);
   });
