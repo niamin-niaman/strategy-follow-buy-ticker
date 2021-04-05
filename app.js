@@ -159,13 +159,22 @@ const calculateTicker = async (streaming, raw_ticker, isWorking, n) => {
   } = await streaming.getQuote(raw_ticker.symbol);
 
   // calculate percent volume
-  let total_day_volume = parseInt(
+  // volume_day_total -> volume_day_total
+  let volume_day_total = parseInt(
     detail[1][0][1].replace(new RegExp(",", "g"), "")
   );
-  let percent_day_volume = raw_ticker.volume / total_day_volume;
+  // percent_volume_ticker_per_day -> percent_volume_ticker_per_day
+  let percent_volume_ticker_per_day = raw_ticker.volume / volume_day_total;
+
+  raw_ticker["volume_day_total"] = volume_day_total;
+  raw_ticker["percent_volume_ticker_per_day"] = helper.toFixedNumber(
+    percent_volume_ticker_per_day * 100,
+    2
+  );
 
   // calculate 5d avg volume
-  let avg_5d_volume = parseInt(
+  // volume_5d_avg - > volume_5d_avg
+  let volume_5d_avg = parseInt(
     by_date
       .slice(0, 5)
       .reduce(
@@ -175,36 +184,70 @@ const calculateTicker = async (streaming, raw_ticker, isWorking, n) => {
       )
   );
 
-  let percent_5d_avg_volume = helper.toFixedNumber(
-    total_day_volume / avg_5d_volume,
+  // percent_volume_day_per_5d_avg -> percent_volume_day_per_5d_avg
+  let percent_volume_day_per_5d_avg = helper.toFixedNumber(
+    volume_day_total / volume_5d_avg,
     2
   );
 
-  // console.log("avg_5d_volume : ", avg_5d_volume);
-
-  raw_ticker["total_day_volume"] = total_day_volume;
-  raw_ticker["percent_day_volume"] = helper.toFixedNumber(
-    percent_day_volume * 100,
-    2
+  raw_ticker["volume_5d_avg"] = volume_5d_avg;
+  raw_ticker["percent_volume_day_per_5d_avg"] = parseInt(
+    percent_volume_day_per_5d_avg * 100
   );
-  raw_ticker["avg_5d_volume"] = avg_5d_volume;
-  raw_ticker["percent_5d_avg_volume"] = parseInt(percent_5d_avg_volume * 100);
+
+  // volume symbol buy & percent
+  let volume_symbol_buy = null;
   try {
-    raw_ticker["percent_symbol_buy"] = parseInt(
-      symbol_percent_buy_sell[1][0].match(/\d+/g)
-    );
-  } catch (error) {
-    console.log("Errro : ", error.message);
-    raw_ticker["percent_symbol_buy"] = null;
-  }
-  try {
-    raw_ticker["percent_symbol_sell"] = parseInt(
-      symbol_percent_buy_sell[1][2].match(/\d+/g)
+    volume_symbol_buy = parseInt(
+      symbol_percent_buy_sell[0][0].replace(new RegExp(",", "g"), "")
     );
   } catch (error) {
     console.log("Error : ", error.message);
-    raw_ticker["percent_symbol_sell"] = null;
   }
+  let percent_volume_symbol_buy_per_5d_avg = helper.toFixedNumber(
+    volume_symbol_buy / volume_5d_avg,
+    2
+  );
+  raw_ticker["volume_symbol_buy"] = volume_symbol_buy;
+  raw_ticker["percent_volume_symbol_buy_per_5d_avg"] = parseInt(
+    percent_volume_symbol_buy_per_5d_avg * 100
+  );
+
+  // volume symbol sell
+  let volume_symbol_sell = null;
+  try {
+    volume_symbol_sell = parseInt(
+      symbol_percent_buy_sell[0][1].replace(new RegExp(",", "g"), "")
+    );
+  } catch (error) {
+    console.log("Error : ", error.message);
+  }
+  let percent_volume_symbol_sell_per_5d_avg = helper.toFixedNumber(
+    volume_symbol_sell / volume_5d_avg,
+    2
+  );
+  raw_ticker["volume_symbol_sell"] = volume_symbol_sell;
+  raw_ticker["percent_volume_symbol_sell_per_5d_avg"] = parseInt(
+    percent_volume_symbol_sell_per_5d_avg * 100
+  );
+
+  // percent symbol buy
+  let percent_symbol_buy = null;
+  try {
+    percent_symbol_buy = parseInt(symbol_percent_buy_sell[1][0].match(/\d+/g));
+  } catch (error) {
+    console.log("Error : ", error.message);
+  }
+  raw_ticker["percent_symbol_buy"] = percent_symbol_buy;
+
+  // percent symbol sell
+  let percent_symbol_sell = null;
+  try {
+    percent_symbol_sell = parseInt(symbol_percent_buy_sell[1][2].match(/\d+/g));
+  } catch (error) {
+    console.log("Error : ", error.message);
+  }
+  raw_ticker["percent_symbol_sell"] = percent_symbol_sell;
 
   console.log(raw_ticker);
   ticker.push(raw_ticker);
@@ -442,26 +485,6 @@ async function main() {
 }
 
 async function expirement() {
-  // let isWorking = [true, false];
-  // let isWorking = [false, false];
-  let isWorking = [true, true];
-  // let isWorking = [];
-  // console.log(isWorking.some((working) => !working));
-  // console.log(!isWorking[0] || !isWorking[1]);
-  // true
-
-  // let isWorking = [true, false];
-  // console.log(!isWorking[0] || !isWorking[1]);
-  // true
-
-  // let isWorking = [false, false];
-  // console.log(!isWorking[0] || !isWorking[1]);
-  // true
-
-  // let isWorking = [true, true];
-  // console.log(!isWorking[0] || !isWorking[1]);
-  // false
-
   let argv = process.argv.slice(2);
   const headless = true && argv[0] == "false" ? false : true;
   const browser = await puppeteer.launch({
@@ -470,8 +493,20 @@ async function expirement() {
   });
   let streaming = [];
   streaming.push(await new Streaming(browser, BROKER, USER_NAME, PASSWORD)); // [0] for monitor ticker
-  streaming.push(await streaming[0].newPage());
-  streaming.push(await streaming[0].newPage());
+  // streaming.push(await streaming[0].newPage());
+  // streaming.push(await streaming[0].newPage());
+
+  const {
+    price,
+    bid_offer,
+    detail,
+    by_date,
+    symbol_percent_buy_sell,
+    sector_percent_buy_sell,
+    market_percent_buy_sell,
+  } = await streaming[0].getQuote("BANPU");
+
+  console.log(symbol_percent_buy_sell);
   tickers = [
     {
       symbol: "AOT",
@@ -547,7 +582,7 @@ async function expirement() {
   TICKERS.push(...tickers);
 
   // // LOOP OVER GLOBAL TICKER
-  callCalculateTicker(streaming.slice(0, 1));
+  // callCalculateTicker(streaming.slice(0, 1));
 
   app.get("/ticker", (req, res) => {
     TICKERS.push(...tickers);

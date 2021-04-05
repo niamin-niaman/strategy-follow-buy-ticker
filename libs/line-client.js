@@ -46,14 +46,14 @@ class Line {
     //   // format with comma 1000 -> 1,000
     //   " บาท \n" +
     //   "คิดเป็น " +
-    //   t.percent_day_volume +
+    //   t.percent_volume_ticker_per_day +
     //   " % ของวัน "+
     //   "volume ทั้งเป็น \n";
 
     // prettier-ignore
     let s =
 `${side} ${t.symbol} ราคา ${t.price} บาท มูลค่า ${t.cost.toLocaleString()} บาท
-คิดเป็น ${t.percent_day_volume} % ของวัน volume ทั้งวันคิดเป็น ${t.percent_5d_avg_volume} % ของค่าเฉลี่ย 5 วัน 
+คิดเป็น ${t.percent_volume_ticker_per_day} % ของวัน volume ทั้งวันคิดเป็น ${t.percent_volume_day_per_5d_avg} % ของค่าเฉลี่ย 5 วัน 
 ซื้อ ${t.percent_symbol_buy} % ขาย ${t.percent_symbol_sell} %`;
 
     message = message.concat(s);

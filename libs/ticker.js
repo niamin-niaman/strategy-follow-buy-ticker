@@ -47,10 +47,10 @@ class Strategy {
   //    price: 5,
   //    time_stamp: 2021-04-03T13:27:51.567Z
   //    cost: 9446500,
-  //    total_day_volume: 15586000,
-  //    percent_day_volume: 12,
-  //    avg_5d_volume: 17340847,
-  //    percent_5d_avg_volume: 90,
+  //    volume_day_total: 15586000,
+  //    percent_volume_ticker_per_day: 12,
+  //    volume_5d_avg: 17340847,
+  //    percent_volume_day_per_5d_avg: 90,
   //    percent_symbol_buy: 33,
   //    percent_symbol_sell: 50,
   // }
