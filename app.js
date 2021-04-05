@@ -14,6 +14,7 @@ const { Line } = require("./libs/line-client");
 const { Portfolio } = require("./libs/portfolio");
 const { Ticker } = require("./libs/ticker");
 const { helper } = require("./libs/helper");
+const { ESTALE } = require("constants");
 
 // Credential
 const env = dotenv.config().parsed;
@@ -27,6 +28,7 @@ const event = new events.EventEmitter();
 // Init local lib
 const line = new Line("3b0L3pLfrq9tdS0Oq2e9w9cTXNBfaYEtJjJZbm953k0");
 const portfolio = new Portfolio(100000, 2);
+// TODOS if have old data then import
 const ticker = new Ticker();
 
 /*
@@ -142,68 +144,116 @@ const TICKERS = [];
 
 // function that while loop get globalticker
 // then get data from streaming for calculate
-let isFinish = true;
-const calculateTicker = async (streaming) => {
-  while (!helper.isEmpty(TICKERS)) {
-    isFinish = false;
-    let raw_ticker = TICKERS.shift();
-    // console.log(raw_ticker);
-    const {
-      price,
-      bid_offer,
-      detail,
-      by_date,
-      symbol_percent_buy_sell,
-      sector_percent_buy_sell,
-      market_percent_buy_sell,
-    } = await streaming.getQuote(raw_ticker.symbol);
 
-    // calculate percent volume
-    let total_day_volume = parseInt(
-      detail[1][0][1].replace(new RegExp(",", "g"), "")
-    );
-    let percent_day_volume = helper.toFixedNumber(
-      raw_ticker.volume / total_day_volume,
-      2
-    );
+const calculateTicker = async (streaming, raw_ticker, isWorking, n) => {
+  isWorking[n] = true;
 
-    // calculate 5d avg volume
-    let avg_5d_volume = parseInt(
-      by_date
-        .slice(0, 5)
-        .reduce(
-          (sum, v, _, { length }) =>
-            sum + parseInt(v[5].replace(new RegExp(",", "g"), "")) / length,
-          0
-        )
-    );
+  const {
+    price,
+    bid_offer,
+    detail,
+    by_date,
+    symbol_percent_buy_sell,
+    sector_percent_buy_sell,
+    market_percent_buy_sell,
+  } = await streaming.getQuote(raw_ticker.symbol);
 
-    let percent_5d_avg_volume = helper.toFixedNumber(
-      total_day_volume / avg_5d_volume,
-      2
-    );
+  // calculate percent volume
+  let total_day_volume = parseInt(
+    detail[1][0][1].replace(new RegExp(",", "g"), "")
+  );
+  let percent_day_volume = raw_ticker.volume / total_day_volume;
 
-    // console.log("avg_5d_volume : ", avg_5d_volume);
+  // calculate 5d avg volume
+  let avg_5d_volume = parseInt(
+    by_date
+      .slice(0, 5)
+      .reduce(
+        (sum, v, _, { length }) =>
+          sum + parseInt(v[5].replace(new RegExp(",", "g"), "")) / length,
+        0
+      )
+  );
 
-    raw_ticker["total_day_volume"] = total_day_volume;
-    raw_ticker["percent_day_volume"] = parseInt(percent_day_volume * 100);
-    raw_ticker["avg_5d_volume"] = avg_5d_volume;
-    raw_ticker["percent_5d_avg_volume"] = parseInt(percent_5d_avg_volume * 100);
+  let percent_5d_avg_volume = helper.toFixedNumber(
+    total_day_volume / avg_5d_volume,
+    2
+  );
+
+  // console.log("avg_5d_volume : ", avg_5d_volume);
+
+  raw_ticker["total_day_volume"] = total_day_volume;
+  raw_ticker["percent_day_volume"] = helper.toFixedNumber(
+    percent_day_volume * 100,
+    2
+  );
+  raw_ticker["avg_5d_volume"] = avg_5d_volume;
+  raw_ticker["percent_5d_avg_volume"] = parseInt(percent_5d_avg_volume * 100);
+  try {
     raw_ticker["percent_symbol_buy"] = parseInt(
       symbol_percent_buy_sell[1][0].match(/\d+/g)
     );
+  } catch (error) {
+    console.log("Errro : ", error.message);
+    raw_ticker["percent_symbol_buy"] = null;
+  }
+  try {
     raw_ticker["percent_symbol_sell"] = parseInt(
       symbol_percent_buy_sell[1][2].match(/\d+/g)
     );
-    console.log(raw_ticker);
-    ticker.push(raw_ticker);
-    await eventLoopQueue();
+  } catch (error) {
+    console.log("Error : ", error.message);
+    raw_ticker["percent_symbol_sell"] = null;
   }
-  isFinish = true;
+
+  console.log(raw_ticker);
+  ticker.push(raw_ticker);
+  await eventLoopQueue();
+
+  isWorking[n] = false;
 };
 
-const callCalculateTicker = (streaming) => {
-  if (isFinish) calculateTicker(streaming);
+let isWorking = [];
+let firstRun = true;
+const callCalculateTicker = async (streaming) => {
+  // both must not working this
+  let n = streaming.length;
+  // console.log("n : ", n);
+  if (firstRun) {
+    firstRun = !firstRun;
+    // console.log("First run");
+    isWorking = Array(n).fill(false);
+  }
+
+  // console.log(isWorking.every((working) => !working));
+
+  // ต้องไม่ทำงานทั้งหมด จึงจะสั่งงานได้
+  // every worker mush not working
+  // if (!isWorking[0] && !isWorking[1]) {
+  if (isWorking.every((working) => !working)) {
+    // calculateTicker(streaming);
+    while (!helper.isEmpty(TICKERS)) {
+      // some worker must not working
+      // if (!isWorking[0] || !isWorking[1]) {
+      if (isWorking.some((working) => !working)) {
+        // console.log(!isWorking[0] || !isWorking[1]);
+        // console.log(isWorking.some((working) => !working));
+        // let raw_ticker = TICKERS.shift();
+        // if (!isWorking[0])
+        //   calculateTicker(streaming[0], raw_ticker, isWorking, 0);
+        // else if (!isWorking[1])
+        // calculateTicker(streaming[1], raw_ticker, isWorking, 1);
+
+        for (let i = 0; i < n; i++) {
+          if (!isWorking[i])
+            calculateTicker(streaming[i], TICKERS.shift(), isWorking, i);
+          else continue;
+        }
+      }
+
+      await eventLoopQueue();
+    }
+  }
 };
 
 // !SECTION
@@ -225,8 +275,9 @@ async function main() {
 
   let streaming = [];
   streaming.push(await new Streaming(browser, BROKER, USER_NAME, PASSWORD)); // [0] for monitor ticker
-  streaming.push(await streaming[0].newPage()); // [1] for getQoute calculate percent of volume
-  streaming.push(await streaming[0].newPage()); // [2] for checking simulate portfolio
+  streaming.push(await streaming[0].newPage()); // [1] for checking simulate portfolio
+  streaming.push(await streaming[0].newPage()); // [2] for getQoute calculate percent of volume
+  // streaming.push(await streaming[0].newPage()); // [3] for getQoute calculate percent of volume
 
   /*
   +------------------------------------------------------+
@@ -238,7 +289,7 @@ async function main() {
   ticker.on("costMoreThan1m", async (ticker) => {
     console.log(`Ticker on sendline :[${new Date().toLocaleString()}]`);
     console.log(ticker);
-    line.formatNsendMessage(ticker);
+    // line.formatNsendMessage(ticker);
   });
 
   // simulate buy /sell
@@ -295,7 +346,7 @@ async function main() {
     });
 
     // call calculate ticker
-    callCalculateTicker(streaming[1]);
+    callCalculateTicker(streaming.slice(2));
   });
 
   // !SECTION
@@ -308,7 +359,7 @@ async function main() {
 
   portfolio.on("hitStopLoss", (symbol, price) => {
     console.log(symbol, " hit stoploss as ", price);
-    console.log("SELL : ", ticker.symbol, " ", ticker.price);
+    console.log("SELL : ", symbol, " ", price);
     portfolio.sell(symbol, 100, price);
   });
 
@@ -345,7 +396,7 @@ async function main() {
   // toggle monitor portfoilo
   app.get("/toggle-monitor-portfolio", (req, res) => {
     portfolio_monitor = !portfolio_monitor;
-    monitorPorfolioMarketPrice(streaming[2], portfolio).then(() => {
+    monitorPorfolioMarketPrice(streaming[1], portfolio).then(() => {
       // console.log("portfolio_monitor");
     });
     res.send("portfolio_monitor : " + portfolio_monitor + "");
@@ -358,53 +409,159 @@ async function main() {
 
   // set new threshold price & cost
   app.get("/set-threshold", (req, res) => {
-    cost_threshold = req.query.cost || cost_threshold;
-    price_threshold = req.query.price || price_threshold;
-    console.log("cost : ", cost);
-    console.log("price : ", price);
+    cost_threshold = parseFloat(req.query.cost || cost_threshold);
+    price_threshold = parseFloat(req.query.price || price_threshold);
+    console.log("cost : ", cost_threshold);
+    console.log("price : ", price_threshold);
+    res.json({
+      price: price_threshold,
+      cost: cost_threshold,
+    });
+  });
+
+  // get threshold price & cost
+  app.get("/get-threshold", (req, res) => {
+    res.json({
+      price: price_threshold,
+      cost: cost_threshold,
+    });
+  });
+
+  // export portfolio data
+  app.get("/portfolio-export", (req, res) => {
+    portfolio.exportData("./data/portfolio_A.json");
     res.send("ok");
   });
 
-  // TODO request to export
+  app.get("/portfolio-import", (req, res) => {
+    portfolio.importData("./data/portfolio_A.json");
+    res.send("ok");
+  });
 
   // !SECTION /SEVER
 }
 
 async function expirement() {
-  // let argv = process.argv.slice(2);
-  // const headless = true && argv[0] == "false" ? false : true;
-  // const browser = await puppeteer.launch({
-  //   headless: headless,
-  //   defaultViewport: null,
-  // });
-  // let streaming = [];
-  // streaming.push(await new Streaming(browser, BROKER, USER_NAME, PASSWORD)); // [0] for monitor ticker
+  // let isWorking = [true, false];
+  // let isWorking = [false, false];
+  let isWorking = [true, true];
+  // let isWorking = [];
+  // console.log(isWorking.some((working) => !working));
+  // console.log(!isWorking[0] || !isWorking[1]);
+  // true
+
+  // let isWorking = [true, false];
+  // console.log(!isWorking[0] || !isWorking[1]);
+  // true
+
+  // let isWorking = [false, false];
+  // console.log(!isWorking[0] || !isWorking[1]);
+  // true
+
+  // let isWorking = [true, true];
+  // console.log(!isWorking[0] || !isWorking[1]);
+  // false
+
+  let argv = process.argv.slice(2);
+  const headless = true && argv[0] == "false" ? false : true;
+  const browser = await puppeteer.launch({
+    headless: headless,
+    defaultViewport: null,
+  });
+  let streaming = [];
+  streaming.push(await new Streaming(browser, BROKER, USER_NAME, PASSWORD)); // [0] for monitor ticker
+  streaming.push(await streaming[0].newPage());
+  streaming.push(await streaming[0].newPage());
+  tickers = [
+    {
+      symbol: "AOT",
+      side: "S",
+      volume: 100,
+      price: 10,
+      cost: 20000000,
+    },
+    {
+      symbol: "BANPU",
+      side: "S",
+      volume: 100,
+      price: 10,
+      cost: 20000000,
+    },
+    {
+      symbol: "INET",
+      side: "S",
+      volume: 100,
+      price: 10,
+      cost: 20000000,
+    },
+    {
+      symbol: "GUNKUL",
+      side: "S",
+      volume: 100,
+      price: 10,
+      cost: 20000000,
+    },
+    {
+      symbol: "IRPC",
+      side: "S",
+      volume: 100,
+      price: 10,
+      cost: 20000000,
+    },
+    {
+      symbol: "AOT",
+      side: "S",
+      volume: 100,
+      price: 10,
+      cost: 20000000,
+    },
+    {
+      symbol: "BANPU",
+      side: "S",
+      volume: 100,
+      price: 10,
+      cost: 20000000,
+    },
+    {
+      symbol: "INET",
+      side: "S",
+      volume: 100,
+      price: 10,
+      cost: 20000000,
+    },
+    {
+      symbol: "GUNKUL",
+      side: "S",
+      volume: 100,
+      price: 10,
+      cost: 20000000,
+    },
+    {
+      symbol: "IRPC",
+      side: "S",
+      volume: 100,
+      price: 10,
+      cost: 20000000,
+    },
+  ];
+  TICKERS.push(...tickers);
+
   // // LOOP OVER GLOBAL TICKER
-  // callCalculateTicker(streaming[0]);
-  // // setInterval(() => {
-  // //   TICKERS.push({
-  // //     symbol: "AOT",
-  // //     side: "S",
-  // //     volume: 100,
-  // //     price: 10,
-  // //     cost: 20000000,
-  // //   });
-  // // }, 1500);
-  // app.get("/ticker", (req, res) => {
-  //   TICKERS.push({
-  //     symbol: "AOT",
-  //     side: "S",
-  //     volume: 100,
-  //     price: 10,
-  //     cost: 20000000,
-  //   });
-  //   callCalculateTicker(streaming[0]);
-  //   // console.log(isFinish);
-  //   res.send(isFinish);
-  // });
-  // app.get("/get-ticker", (req, res) => {
-  //   res.json(TICKERS);
-  // });
+  callCalculateTicker(streaming.slice(0, 1));
+
+  app.get("/ticker", (req, res) => {
+    TICKERS.push(...tickers);
+    callCalculateTicker(streaming.slice(0, 1));
+    // console.log(isFinish);
+    // res.json({
+    //   worker_1: isFinish[0],
+    //   worker_2: isFinish[1],
+    // });
+    res.send("OK");
+  });
+  app.get("/get-ticker", (req, res) => {
+    res.json(TICKERS);
+  });
   // let t_01 = [[], [], [], [], [], [], [], [], []];
   // at t_01
   // +-+-+-+-+-+-+-+-+-+  +-+-+-+
