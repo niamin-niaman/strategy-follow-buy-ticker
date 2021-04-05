@@ -20,6 +20,7 @@ class Ticker extends EventEmitter {
 
   push(raw_ticker) {
     // store in array ticker
+    // TODOS ticker to mongo db
     // this.ticker.push(raw_ticker);
 
     // anounce that ticker is comiing
@@ -55,6 +56,7 @@ class Strategy {
   // }
 
   costMoreThan1m(t) {
+    // TODO change parameters in this
     if (t.cost > 1000000) return true;
     return false;
   }

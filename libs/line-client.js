@@ -33,7 +33,7 @@ class Line {
   //   retrieve array of ticker
   formatNsendMessage = (t) => {
     let message = "";
-    message = new Date().toLocaleTimeString() + "\n";
+    message = t.time_stamp.toLocaleTimeString() + "\n";
     let side = t.side == "B" ? "ซื้อ" : t.side == "S" ? "ขาย" : " - ";
     // let s =
     //   side +
