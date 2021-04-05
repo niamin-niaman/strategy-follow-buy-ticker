@@ -20,7 +20,7 @@ class Ticker extends EventEmitter {
 
   push(raw_ticker) {
     // store in array ticker
-    this.ticker.push(raw_ticker);
+    // this.ticker.push(raw_ticker);
 
     // anounce that ticker is comiing
     this.emit("ticker", raw_ticker);

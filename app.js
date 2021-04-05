@@ -443,8 +443,8 @@ async function expirement() {
 }
 
 if (require.main === module) {
-  // main();
-  expirement();
+  main();
+  // expirement();
   app.listen(port, () => {
     console.log(`listening at http://localhost:${port}`);
   });

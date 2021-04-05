@@ -90,3 +90,5 @@ let result = portfolio.getPorfolio()
 ## Line-client
 
 # To-dos
+* [ ] calculate bid offer [this](https://web.facebook.com/stockjournoey/posts/234161043821994?_rdc=1&_rdr) 
+* [ ] store ticker into db ( mongodb )
