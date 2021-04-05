@@ -92,3 +92,23 @@ let result = portfolio.getPorfolio()
 # To-dos
 * [ ] calculate bid offer [this](https://web.facebook.com/stockjournoey/posts/234161043821994?_rdc=1&_rdr) 
 * [ ] store ticker into db ( mongodb )
+
+
+# Name conventios
+## varialbe
+### local
+* lowercase with snake case like volume_symbol_buy
+### global
+* uppercase like TICKERS
+
+## method / function
+* lowercase then uppercase with camelcase like writeDownSomethin()
+
+## class
+* uppercase then uppercase this camelcase like Streaming
+
+## abbreviation
+* volume -> vol
+* avergae -> avg
+* percent -> pct
+* per -> p
