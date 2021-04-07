@@ -27,6 +27,7 @@ const event = new events.EventEmitter();
 
 // Init local lib
 const line = new Line("3b0L3pLfrq9tdS0Oq2e9w9cTXNBfaYEtJjJZbm953k0");
+const line_1 = new Line("0JIVvMrPy24BFIN9IhbHNBVZ5mOhfaJzTg8qar9iNgm");
 const portfolio = new Portfolio(100000, 2);
 // TODOS if have old data then import
 const ticker = new Ticker();
@@ -163,14 +164,8 @@ const calculateTicker = async (streaming, raw_ticker, isWorking, n) => {
   let volume_day_total = parseInt(
     detail[1][0][1].replace(new RegExp(",", "g"), "")
   );
-  // percent_volume_ticker_per_day -> percent_volume_ticker_per_day
-  let percent_volume_ticker_per_day = raw_ticker.volume / volume_day_total;
 
   raw_ticker["volume_day_total"] = volume_day_total;
-  raw_ticker["percent_volume_ticker_per_day"] = helper.toFixedNumber(
-    percent_volume_ticker_per_day * 100,
-    2
-  );
 
   // calculate 5d avg volume
   // volume_5d_avg - > volume_5d_avg
@@ -184,16 +179,7 @@ const calculateTicker = async (streaming, raw_ticker, isWorking, n) => {
       )
   );
 
-  // percent_volume_day_per_5d_avg -> percent_volume_day_per_5d_avg
-  let percent_volume_day_per_5d_avg = helper.toFixedNumber(
-    volume_day_total / volume_5d_avg,
-    2
-  );
-
   raw_ticker["volume_5d_avg"] = volume_5d_avg;
-  raw_ticker["percent_volume_day_per_5d_avg"] = parseInt(
-    percent_volume_day_per_5d_avg * 100
-  );
 
   // volume symbol buy & percent
   let volume_symbol_buy = null;
@@ -204,14 +190,7 @@ const calculateTicker = async (streaming, raw_ticker, isWorking, n) => {
   } catch (error) {
     console.log("Error : ", error.message);
   }
-  let percent_volume_symbol_buy_per_5d_avg = helper.toFixedNumber(
-    volume_symbol_buy / volume_5d_avg,
-    2
-  );
   raw_ticker["volume_symbol_buy"] = volume_symbol_buy;
-  raw_ticker["percent_volume_symbol_buy_per_5d_avg"] = parseInt(
-    percent_volume_symbol_buy_per_5d_avg * 100
-  );
 
   // volume symbol sell
   let volume_symbol_sell = null;
@@ -222,14 +201,7 @@ const calculateTicker = async (streaming, raw_ticker, isWorking, n) => {
   } catch (error) {
     console.log("Error : ", error.message);
   }
-  let percent_volume_symbol_sell_per_5d_avg = helper.toFixedNumber(
-    volume_symbol_sell / volume_5d_avg,
-    2
-  );
   raw_ticker["volume_symbol_sell"] = volume_symbol_sell;
-  raw_ticker["percent_volume_symbol_sell_per_5d_avg"] = parseInt(
-    percent_volume_symbol_sell_per_5d_avg * 100
-  );
 
   // percent symbol buy
   let percent_symbol_buy = null;
@@ -329,14 +301,14 @@ async function main() {
   */
 
   // sendline
-  ticker.on("costMoreThan1m", async (ticker) => {
-    console.log(`Ticker on sendline :[${new Date().toLocaleString()}]`);
-    console.log(ticker);
-    // line.formatNsendMessage(ticker);
+  ticker.on("costMoreThan", async (ticker) => {
+    console.log(`Send line :[${new Date().toLocaleString()}]`);
+    // console.log(ticker);
+    line.formatNsendMessage(ticker);
   });
 
   // simulate buy /sell
-  ticker.on("costMoreThan1m", async (ticker) => {
+  ticker.on("costMoreThan", async (ticker) => {
     console.log(`Ticker on sendline :[${new Date().toLocaleString()}]`);
     let symbols_form_portfolio = portfolio.getPortfolio().map((v) => v.Symbol);
     if (ticker.side == "B" && !symbols_form_portfolio.includes(ticker.symbol)) {
@@ -351,6 +323,17 @@ async function main() {
     }
   });
 
+  ticker.on("volBuyGTvol5dAvg", async (t) => {
+    console.log(`Send A :[${new Date().toLocaleString()}]`);
+    // prettier-ignore
+    let s = 
+`${t.symbol} ราคา ${t.price} บาท มูลค่า ${t.cost.toLocaleString()} บาท
+volume buy : ${t.volume_symbol_buy.toLocaleString()} volume 5d avg : ${t.volume_5d_avg.toLocaleString()}
+คิดเป็น ${t.percent_volume_buy_per_5d_avg} %
+ซื้อ ${t.percent_symbol_buy} % ขาย ${t.percent_symbol_sell} %`;
+    line_1.sendMessage(s);
+  });
+
   // !SECTION
 
   /*
@@ -362,14 +345,13 @@ async function main() {
   /**
    * when ticker alert.it will filter out
    * 1. price < 5 bath
-   * 2. cost > 1 million
+   * 2. cost > 500K
    */
   // threshold before sending to calculate ticker
   let price_threshold = 6;
-  let cost_threshold = 500000;
+  let cost_threshold = 100000;
   event.on("tickers", (raw_tickers) => {
     // console.log(`Event on tickers : [${new Date().toLocaleString()}]`);
-    // console.log(raw_tickers);
 
     // filter out DW by symbol length morethan 7
     raw_tickers = raw_tickers.filter((v) => v.symbol.length < 8);
@@ -384,12 +366,19 @@ async function main() {
     raw_tickers = raw_tickers.filter((v) => v.cost > cost_threshold);
 
     // push raw_ticker to global ticker for calculate ticker
-    raw_tickers.forEach((v) => {
-      TICKERS.push(v);
-    });
-
-    // call calculate ticker
-    callCalculateTicker(streaming.slice(2));
+    // console.log(raw_tickers);
+    // console.log(raw_tickers);
+    console.log("isEmpty : ", !helper.isEmpty(raw_tickers));
+    if (!helper.isEmpty(raw_tickers)) {
+      raw_tickers.forEach((v) => {
+        // dont push undefined value
+        // console.log("-");
+        // console.log(v);
+        TICKERS.push(v);
+      });
+      // call calculate ticker
+      callCalculateTicker(streaming.slice(2));
+    }
   });
 
   // !SECTION
@@ -479,6 +468,12 @@ async function main() {
   app.get("/portfolio-import", (req, res) => {
     portfolio.importData("./data/portfolio_A.json");
     res.send("ok");
+  });
+
+  app.get("/set-cost-condition", (req, res) => {
+    const morethan = parseFloat(req.query.cost || morethan);
+    let option = { cost: morethan };
+    ticker.emit("setCostMoreThan", option);
   });
 
   // !SECTION /SEVER
